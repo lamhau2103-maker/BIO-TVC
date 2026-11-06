@@ -96,8 +96,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [code, setCode] = useState('SOP-RED-006');
   const [title, setTitle] = useState('');
   const [zone, setZone] = useState<BioZone>('RED');
-  const [selectedAreas, setSelectedAreas] = useState<string[]>(['Vùng Đỏ · Ngoại Vi & Trạm Rửa Xe']);
+  const [selectedAreas, setSelectedAreas] = useState<string[]>([
+    'Trạm Rửa Xe & Ngoại Vi — Vùng Đỏ ( rủi ro cao )',
+  ]);
   const [newAreaInput, setNewAreaInput] = useState<string>('');
+  const [newAreaZoneType, setNewAreaZoneType] = useState<
+    'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )'
+  >('Vùng Đỏ ( rủi ro cao )');
   const [tagsInput, setTagsInput] = useState('');
   const [imageUrl, setImageUrl] = useState(IMG_TRUCK_WASH);
   const [summary, setSummary] = useState('');
@@ -137,40 +142,109 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     }
   };
 
+  const parseAreaItem = (
+    formatted: string
+  ): {
+    name: string;
+    zoneType: 'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )';
+  } => {
+    const parts = formatted.split(' — ');
+    if (parts.length >= 2) {
+      const last = parts[parts.length - 1].trim();
+      const name = parts.slice(0, -1).join(' — ').trim();
+      if (last === 'Vùng Xanh' || last === 'Vùng Vàng ( rủi ro )' || last === 'Vùng Đỏ ( rủi ro cao )') {
+        return { name, zoneType: last };
+      }
+    }
+    const lower = formatted.toLowerCase();
+    if (lower.includes('vùng xanh') || lower.includes('chuồng')) {
+      return { name: formatted, zoneType: 'Vùng Xanh' };
+    }
+    if (lower.includes('vùng vàng') || lower.includes('rủi ro') && !lower.includes('rủi ro cao')) {
+      return { name: formatted, zoneType: 'Vùng Vàng ( rủi ro )' };
+    }
+    return { name: formatted, zoneType: 'Vùng Đỏ ( rủi ro cao )' };
+  };
+
+  const formatAreaWithZone = (
+    name: string,
+    zoneType: 'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )'
+  ): string => {
+    const cleanName = name.replace(/\s*—\s*(Vùng Xanh|Vùng Vàng \( rủi ro \)|Vùng Đỏ \( rủi ro cao \))$/i, '').trim();
+    return `${cleanName} — ${zoneType}`;
+  };
+
   const inferZoneFromAreaText = (areaText: string): BioZone => {
     const lower = areaText.toLowerCase();
-    if (lower.includes('đỏ') && lower.includes('vàng')) return 'RED_YELLOW';
-    if (lower.includes('đỏ') || lower.includes('rửa xe') || lower.includes('ngoại vi')) return 'RED';
-    if (lower.includes('vàng') || lower.includes('nhà tắm') || lower.includes('vật tư') || lower.includes('cách ly'))
-      return 'YELLOW';
-    if (lower.includes('xanh') || lower.includes('sản xuất') || lower.includes('chuồng')) return 'GREEN';
+    const hasRed = lower.includes('vùng đỏ') || lower.includes('rủi ro cao');
+    const hasYellow = lower.includes('vùng vàng');
+    const hasGreen = lower.includes('vùng xanh');
+    if (hasRed && hasYellow) return 'RED_YELLOW';
+    if (hasRed) return 'RED';
+    if (hasYellow) return 'YELLOW';
+    if (hasGreen) return 'GREEN';
     return 'GENERAL';
   };
 
   const handleAddArea = () => {
     const trimmed = newAreaInput.trim();
-    if (!trimmed) return;
+    const areaName = trimmed || `Khu Vực ${selectedAreas.length + 1}`;
+    const formatted = formatAreaWithZone(areaName, newAreaZoneType);
+
     setSelectedAreas((prev) => {
-      const next = prev.includes(trimmed) ? prev : [...prev, trimmed];
-      setZone(inferZoneFromAreaText(next.join(' · ')));
+      const next = prev.includes(formatted) ? prev : [...prev, formatted];
+      setZone(inferZoneFromAreaText(next.join(' | ')));
       return next;
     });
-    if (!areaCatalog.includes(trimmed)) {
-      onUpdateAreaCatalog([...areaCatalog, trimmed]);
+    if (!areaCatalog.includes(formatted)) {
+      onUpdateAreaCatalog([...areaCatalog, formatted]);
       onNotify(
         'success',
         'Đã thêm Khu Vực mới',
-        `Khu vực "${trimmed}" đã được thêm và cập nhật vào bộ lọc Quy Trình Hệ Thống.`
+        `Đã thêm "${formatted}" và đồng bộ sang bộ lọc Quy Trình Hệ Thống.`
       );
     }
     setNewAreaInput('');
+  };
+
+  const handleUpdateSelectedAreaName = (index: number, newName: string) => {
+    setSelectedAreas((prev) => {
+      const next = prev.map((item, idx) => {
+        if (idx !== index) return item;
+        const parsed = parseAreaItem(item);
+        return formatAreaWithZone(newName, parsed.zoneType);
+      });
+      setZone(inferZoneFromAreaText(next.join(' | ')));
+      return next;
+    });
+  };
+
+  const handleUpdateSelectedAreaZoneType = (
+    index: number,
+    nextZoneType: 'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )'
+  ) => {
+    setSelectedAreas((prev) => {
+      const oldItem = prev[index];
+      const parsed = parseAreaItem(oldItem);
+      const updatedItem = formatAreaWithZone(parsed.name, nextZoneType);
+      const next = prev.map((item, idx) => (idx === index ? updatedItem : item));
+      setZone(inferZoneFromAreaText(next.join(' | ')));
+
+      // Also update in catalog if present
+      if (areaCatalog.includes(oldItem)) {
+        onUpdateAreaCatalog(areaCatalog.map((c) => (c === oldItem ? updatedItem : c)));
+      } else if (!areaCatalog.includes(updatedItem)) {
+        onUpdateAreaCatalog([...areaCatalog, updatedItem]);
+      }
+      return next;
+    });
   };
 
   const handleRemoveSelectedArea = (areaToRemove: string) => {
     setSelectedAreas((prev) => {
       const next = prev.filter((item) => item !== areaToRemove);
       if (next.length > 0) {
-        setZone(inferZoneFromAreaText(next.join(' · ')));
+        setZone(inferZoneFromAreaText(next.join(' | ')));
       }
       return next;
     });
@@ -181,7 +255,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       const exists = prev.includes(areaName);
       const next = exists ? prev.filter((item) => item !== areaName) : [...prev, areaName];
       if (next.length > 0) {
-        setZone(inferZoneFromAreaText(next.join(' · ')));
+        setZone(inferZoneFromAreaText(next.join(' | ')));
       }
       return next;
     });
@@ -197,8 +271,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setCode(`SOP-BIO-${String(sops.length + 1).padStart(3, '0')}`);
     setTitle('');
     setZone('RED');
-    setSelectedAreas(['Vùng Đỏ · Ngoại Vi & Trạm Rửa Xe']);
+    setSelectedAreas(['Trạm Rửa Xe & Ngoại Vi — Vùng Đỏ ( rủi ro cao )']);
     setNewAreaInput('');
+    setNewAreaZoneType('Vùng Đỏ ( rủi ro cao )');
     setTagsInput('');
     setImageUrl(IMG_TRUCK_WASH);
     setSummary('');
@@ -268,8 +343,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       .filter(Boolean);
 
     const finalAreas = [...selectedAreas];
-    if (newAreaInput.trim() && !finalAreas.includes(newAreaInput.trim())) {
-      finalAreas.push(newAreaInput.trim());
+    if (newAreaInput.trim()) {
+      const formattedPending = formatAreaWithZone(newAreaInput.trim(), newAreaZoneType);
+      if (!finalAreas.includes(formattedPending)) {
+        finalAreas.push(formattedPending);
+      }
     }
     const updatedCatalog = [...areaCatalog];
     let catalogChanged = false;
@@ -571,13 +649,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               />
             </div>
 
-            {/* Khu Vực (Add / Thêm Khu Vực) Section */}
+            {/* Khu Vực (Add / Thêm Khu Vực + Chọn Loại Vùng tương ứng) Section */}
             <div className="p-4 rounded-xl bg-[#0F172A] border border-white/10 space-y-3.5">
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-cyan-300">
-                  Khu Vực (Nhập tên khu vực và nhấn Thêm) *
+                  Khu Vực & Loại Vùng Tương Ứng *
                 </label>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                   <input
                     type="text"
                     value={newAreaInput}
@@ -588,47 +666,104 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         handleAddArea();
                       }
                     }}
-                    placeholder="Nhập tên Khu Vực mới (VD: Khu Cách Ly, Trạm Rửa Xe, Chuồng Đẻ, Nhà Tắm...)..."
-                    className="flex-1 px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-cyan-500/40 focus:border-cyan-400 focus:outline-none text-sm text-white"
+                    placeholder="Nhập tên Khu Vực (VD: Khu Cách Ly, Trạm Rửa Xe, Chuồng Đẻ)..."
+                    className="sm:col-span-5 px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-cyan-500/40 focus:border-cyan-400 focus:outline-none text-sm text-white"
                   />
+                  <select
+                    value={newAreaZoneType}
+                    onChange={(e) =>
+                      setNewAreaZoneType(
+                        e.target.value as
+                          | 'Vùng Xanh'
+                          | 'Vùng Vàng ( rủi ro )'
+                          | 'Vùng Đỏ ( rủi ro cao )'
+                      )
+                    }
+                    className="sm:col-span-4 px-3 py-2.5 rounded-lg bg-[#0B1120] border border-cyan-500/40 focus:border-cyan-400 focus:outline-none text-sm font-semibold text-white"
+                  >
+                    <option value="Vùng Xanh">■ Vùng Xanh</option>
+                    <option value="Vùng Vàng ( rủi ro )">▲ Vùng Vàng ( rủi ro )</option>
+                    <option value="Vùng Đỏ ( rủi ro cao )">● Vùng Đỏ ( rủi ro cao )</option>
+                  </select>
                   <button
                     type="button"
                     onClick={handleAddArea}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                    className="sm:col-span-3 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <PlusCircle className="w-4 h-4" />
-                    <span>Thêm Khu Vực (Add)</span>
+                    <span>Thêm Khu Vực</span>
                   </button>
                 </div>
               </div>
 
-              {/* Selected Areas for current SOP */}
-              <div className="space-y-1.5">
+              {/* Selected Areas for current SOP (Each has its corresponding Zone Type box) */}
+              <div className="space-y-2">
                 <div className="text-[11px] text-slate-400">
-                  Khu Vực đang áp dụng cho quy trình này ({selectedAreas.length}):
+                  Danh sách Khu Vực & Loại Vùng đang áp dụng ({selectedAreas.length}):
                 </div>
                 {selectedAreas.length === 0 ? (
                   <div className="text-xs text-amber-400 py-1">
-                    Chưa có Khu Vực nào được chọn. Hãy nhập và nhấn &ldquo;Thêm Khu Vực (Add)&rdquo; hoặc bấm chọn từ danh mục bên dưới.
+                    Chưa có Khu Vực nào được chọn. Hãy nhập tên Khu Vực, chọn Loại Vùng và nhấn &ldquo;Thêm Khu Vực&rdquo;.
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedAreas.map((area) => (
-                      <div
-                        key={area}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-400/40 text-xs font-medium text-cyan-200"
-                      >
-                        <span>{area}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSelectedArea(area)}
-                          className="text-cyan-300 hover:text-red-400 transition-colors cursor-pointer"
-                          title="Gỡ Khu Vực này khỏi quy trình"
+                  <div className="space-y-2">
+                    {selectedAreas.map((area, idx) => {
+                      const parsed = parseAreaItem(area);
+                      const selectBorderClass =
+                        parsed.zoneType === 'Vùng Đỏ ( rủi ro cao )'
+                          ? 'border-red-500/50 text-red-300 bg-red-950/30'
+                          : parsed.zoneType === 'Vùng Vàng ( rủi ro )'
+                          ? 'border-amber-500/50 text-amber-300 bg-amber-950/30'
+                          : 'border-emerald-500/50 text-emerald-300 bg-emerald-950/30';
+
+                      return (
+                        <div
+                          key={`${idx}-${parsed.zoneType}`}
+                          className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2 rounded-lg bg-[#0B1120] border border-white/10"
                         >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <input
+                            type="text"
+                            value={parsed.name}
+                            onChange={(e) => handleUpdateSelectedAreaName(idx, e.target.value)}
+                            placeholder="Tên Khu Vực..."
+                            className="sm:col-span-6 px-3 py-1.5 rounded bg-[#1E293B] border border-white/10 text-xs font-medium text-white focus:border-cyan-400 focus:outline-none"
+                          />
+                          <select
+                            value={parsed.zoneType}
+                            onChange={(e) =>
+                              handleUpdateSelectedAreaZoneType(
+                                idx,
+                                e.target.value as
+                                  | 'Vùng Xanh'
+                                  | 'Vùng Vàng ( rủi ro )'
+                                  | 'Vùng Đỏ ( rủi ro cao )'
+                              )
+                            }
+                            className={`sm:col-span-5 px-3 py-1.5 rounded border text-xs font-semibold focus:outline-none ${selectBorderClass}`}
+                          >
+                            <option value="Vùng Xanh" className="bg-[#0B1120] text-emerald-300">
+                              ■ Vùng Xanh
+                            </option>
+                            <option value="Vùng Vàng ( rủi ro )" className="bg-[#0B1120] text-amber-300">
+                              ▲ Vùng Vàng ( rủi ro )
+                            </option>
+                            <option value="Vùng Đỏ ( rủi ro cao )" className="bg-[#0B1120] text-red-300">
+                              ● Vùng Đỏ ( rủi ro cao )
+                            </option>
+                          </select>
+                          <div className="sm:col-span-1 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSelectedArea(area)}
+                              className="p-1.5 rounded bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-300 transition-colors cursor-pointer"
+                              title="Xóa Khu Vực này"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
