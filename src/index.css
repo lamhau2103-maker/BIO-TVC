@@ -1,0 +1,71 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #0B1120;
+    color: #F8FAFC;
+    letter-spacing: 0.01em;
+    overflow-x: hidden;
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Markdown rendered content styling inside AI responses */
+.sop-markdown h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #F8FAFC;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.sop-markdown p {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: #E2E8F0;
+  margin-bottom: 0.75rem;
+}
+
+.sop-markdown ul,
+.sop-markdown ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.875rem;
+  padding-left: 1.25rem;
+  color: #E2E8F0;
+}
+
+.sop-markdown ol {
+  list-style-type: decimal;
+}
+
+.sop-markdown ul {
+  list-style-type: disc;
+}
+
+.sop-markdown li {
+  margin-bottom: 0.45rem;
+  line-height: 1.65;
+  font-size: 0.9375rem;
+}
+
+.sop-markdown strong {
+  color: #38BDF8;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

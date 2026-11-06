@@ -1,0 +1,6 @@
+{
+  "name": "BIO-SHIELD AI",
+  "description": "Hệ Thống Tra Cứu & Giải Đáp Quy Trình An Toàn Sinh Học Trại Heo Công Nghệ Cao (SOP & AI RAG Knowledge Center).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
