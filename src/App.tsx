@@ -396,7 +396,7 @@ export default function App() {
                   : 'text-slate-300 hover:text-white'
               }`}
             >
-              Nạp Tài Liệu ( Admin )
+              Tài Liệu (Admin)
             </button>
           </nav>
 
