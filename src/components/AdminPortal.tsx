@@ -17,6 +17,7 @@ import {
   Eye,
   X,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   BioZone,
   SopDocument,
@@ -152,7 +153,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     if (parts.length >= 2) {
       const last = parts[parts.length - 1].trim();
       const name = parts.slice(0, -1).join(' — ').trim();
-      if (last === 'Vùng Xanh' || last === 'Vùng Vàng ( rủi ro )' || last === 'Vùng Đỏ ( rủi ro cao )') {
+      if (
+        last === 'Vùng Xanh' ||
+        last === 'Vùng Vàng ( rủi ro )' ||
+        last === 'Vùng Đỏ ( rủi ro cao )'
+      ) {
         return { name, zoneType: last };
       }
     }
@@ -160,7 +165,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     if (lower.includes('vùng xanh') || lower.includes('chuồng')) {
       return { name: formatted, zoneType: 'Vùng Xanh' };
     }
-    if (lower.includes('vùng vàng') || lower.includes('rủi ro') && !lower.includes('rủi ro cao')) {
+    if (
+      lower.includes('vùng vàng') ||
+      (lower.includes('rủi ro') && !lower.includes('rủi ro cao'))
+    ) {
       return { name: formatted, zoneType: 'Vùng Vàng ( rủi ro )' };
     }
     return { name: formatted, zoneType: 'Vùng Đỏ ( rủi ro cao )' };
@@ -170,7 +178,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     name: string,
     zoneType: 'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )'
   ): string => {
-    const cleanName = name.replace(/\s*—\s*(Vùng Xanh|Vùng Vàng \( rủi ro \)|Vùng Đỏ \( rủi ro cao \))$/i, '').trim();
+    const cleanName = name
+      .replace(/\s*—\s*(Vùng Xanh|Vùng Vàng \( rủi ro \)|Vùng Đỏ \( rủi ro cao \))$/i, '')
+      .trim();
     return `${cleanName} — ${zoneType}`;
   };
 
@@ -445,180 +455,256 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setMetrics((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: val } : m)));
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.05,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 16, scale: 0.98 },
+    show: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: 'spring' as const,
+        stiffness: 350,
+        damping: 28,
+      },
+    },
+  };
+
   return (
     <div className="relative min-h-[680px]">
       {/* SECURITY BLUR OVERLAY WHEN LOCKED */}
-      {!isUnlocked && (
-        <div className="fixed inset-0 z-30 bg-[#0B1120]/85 backdrop-blur-xl flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-xl bg-[#1E293B] border border-white/15 p-6 shadow-2xl space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center text-cyan-400 shrink-0">
-                <Lock className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs font-mono text-cyan-400">ĐĂNG NHẬP QUẢN TRỊ VIÊN</div>
-                <h2 className="text-lg font-bold text-white">Cổng Quản Trị & Nạp Dữ Liệu</h2>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Vui lòng nhập <strong>ID Admin</strong> và <strong>Mật khẩu</strong> để truy cập khu vực quản lý và nạp dữ liệu quy trình An toàn sinh học.
-            </p>
-
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="admin-id-input"
-                  className="block text-xs font-medium text-slate-200"
-                >
-                  ID Quản trị:
-                </label>
-                <input
-                  id="admin-id-input"
-                  type="text"
-                  value={idInput}
-                  onChange={(e) => setIdInput(e.target.value)}
-                  placeholder="Nhập tài khoản quản trị..."
-                  autoFocus
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-white/15 focus:border-cyan-400 focus:outline-none text-sm text-white font-mono"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="admin-password-input"
-                  className="block text-xs font-medium text-slate-200"
-                >
-                  Mật khẩu Quản trị:
-                </label>
-                <input
-                  id="admin-password-input"
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="Nhập mật khẩu..."
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-white/15 focus:border-cyan-400 focus:outline-none text-sm text-white font-mono"
-                />
-              </div>
-
-              {loginError && (
-                <div className="p-3 rounded-lg bg-red-950/50 border border-red-500/40 text-xs text-red-200">
-                  {loginError}
+      <AnimatePresence>
+        {!isUnlocked && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-30 bg-[#060B14]/80 backdrop-blur-2xl flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 20, filter: 'blur(8px)' }}
+              animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, scale: 0.95, y: -15, filter: 'blur(6px)' }}
+              transition={{ type: 'spring', stiffness: 360, damping: 28 }}
+              className="w-full max-w-md rounded-2xl bg-slate-900/60 backdrop-blur-2xl border border-white/15 hover:border-emerald-400/40 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.65)] ring-1 ring-inset ring-white/10 space-y-5 transition-colors duration-300"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+                  <Lock className="w-5 h-5" />
                 </div>
-              )}
-
-              <div className="space-y-2.5 pt-1">
-                <button
-                  type="submit"
-                  className="w-full py-2.5 px-4 rounded-lg bg-gradient-to-r from-[#06B6D4] to-[#3B82F6] hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm transition-all cursor-pointer"
-                >
-                  Đăng Nhập Cổng Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={onBackToMain}
-                  className="w-full py-2.5 px-4 rounded-lg bg-[#0F172A] hover:bg-slate-800 border border-white/15 text-slate-200 hover:text-white font-medium text-xs transition-colors cursor-pointer"
-                >
-                  Trở về giao diện chính
-                </button>
+                <div>
+                  <div className="text-xs font-mono text-emerald-400 tracking-wide">
+                    ĐĂNG NHẬP QUẢN TRỊ VIÊN
+                  </div>
+                  <h2 className="text-lg font-bold text-[#F8FAFC]">
+                    Cổng Quản Trị & Nạp Dữ Liệu
+                  </h2>
+                </div>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+              <p className="text-xs text-[#94A3B8] leading-relaxed">
+                Vui lòng nhập <strong className="text-[#F8FAFC]">ID Admin</strong> và{' '}
+                <strong className="text-[#F8FAFC]">Mật khẩu</strong> để truy cập khu vực quản lý và nạp dữ liệu quy trình An toàn sinh học.
+              </p>
+
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="admin-id-input"
+                    className="block text-xs font-medium text-[#F8FAFC]"
+                  >
+                    ID Quản trị:
+                  </label>
+                  <input
+                    id="admin-id-input"
+                    type="text"
+                    value={idInput}
+                    onChange={(e) => setIdInput(e.target.value)}
+                    placeholder="Nhập tài khoản quản trị..."
+                    autoFocus
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC] font-mono transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="admin-password-input"
+                    className="block text-xs font-medium text-[#F8FAFC]"
+                  >
+                    Mật khẩu Quản trị:
+                  </label>
+                  <input
+                    id="admin-password-input"
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="Nhập mật khẩu..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC] font-mono transition-colors"
+                  />
+                </div>
+
+                {loginError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
+                  >
+                    {loginError}
+                  </motion.div>
+                )}
+
+                <div className="space-y-2.5 pt-1">
+                  <motion.button
+                    whileHover={{ y: -2, scale: 1.01 }}
+                    whileTap={{ scale: 0.97 }}
+                    type="submit"
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#10B981] via-[#06B6D4] to-[#3B82F6] text-slate-950 font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer"
+                  >
+                    Đăng Nhập Cổng Admin
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ y: -2, scale: 1.01 }}
+                    whileTap={{ scale: 0.97 }}
+                    type="button"
+                    onClick={onBackToMain}
+                    className="w-full py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-emerald-400/40 text-[#94A3B8] hover:text-[#F8FAFC] font-medium text-xs transition-colors cursor-pointer"
+                  >
+                    Trở về giao diện chính
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ADMIN DASHBOARD CONTENT */}
-      <div className="space-y-8">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="space-y-8"
+      >
         {/* Top Admin Status Bar */}
-        <div className="rounded-xl bg-[#1E293B]/75 backdrop-blur-md border border-white/10 p-5 flex flex-wrap items-center justify-between gap-4">
+        <motion.div
+          variants={itemVariants}
+          className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 p-5 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 flex flex-wrap items-center justify-between gap-4 transition-colors duration-300"
+        >
           <div>
-            <div className="flex items-center gap-2 text-xs text-slate-400 mb-1">
-              <span className="font-mono text-emerald-400">● QUẢN TRỊ DỮ LIỆU AN TOÀN SINH HỌC</span>
+            <div className="flex items-center gap-2 text-xs text-[#94A3B8] mb-1">
+              <span className="font-mono text-emerald-400">
+                ● QUẢN TRỊ DỮ LIỆU AN TOÀN SINH HỌC
+              </span>
               <span aria-hidden="true">·</span>
               <span>
                 Đang nạp {sops.filter((s) => s.active).length} / {sops.length} quy trình vào hệ thống
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-2xl font-bold text-[#F8FAFC]">
               Quản Trị & Huấn Luyện Dữ Liệu Quy Trình Cho Bot Học
             </h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <button
+            <motion.button
+              whileHover={{ y: -2, scale: 1.01 }}
+              whileTap={{ scale: 0.97 }}
               type="button"
               onClick={() => setShowCredentialsChange((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0F172A] hover:bg-slate-800 text-xs font-medium text-slate-200 border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-xs font-medium text-[#F8FAFC] border border-white/10 hover:border-emerald-400/40 cursor-pointer whitespace-nowrap shrink-0 transition-colors"
             >
               <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
               Đổi ID / Mật khẩu
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              whileHover={{ y: -2, scale: 1.01 }}
+              whileTap={{ scale: 0.97 }}
               type="button"
               onClick={onLock}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-xs font-semibold text-red-300 border border-red-500/30 cursor-pointer whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-300 border border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.15)] cursor-pointer whitespace-nowrap shrink-0 transition-colors"
             >
               <Unlock className="w-3.5 h-3.5" />
               Đăng Xuất Admin
-            </button>
+            </motion.button>
           </div>
-        </div>
+        </motion.div>
 
         {/* Optional Change Credentials Drawer */}
-        {showCredentialsChange && (
-          <div className="rounded-xl bg-[#0F172A] border border-cyan-500/30 p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="text-xs text-slate-300">
-              <span className="font-semibold text-white">Cập nhật tài khoản Quản trị viên:</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={newIdInput}
-                onChange={(e) => setNewIdInput(e.target.value)}
-                placeholder="ID Admin mới..."
-                className="px-3 py-1.5 rounded-lg bg-[#0B1120] border border-white/15 text-xs text-white font-mono"
-              />
-              <input
-                type="password"
-                value={newPasswordInput}
-                onChange={(e) => setNewPasswordInput(e.target.value)}
-                placeholder="Mật khẩu mới..."
-                className="px-3 py-1.5 rounded-lg bg-[#0B1120] border border-white/15 text-xs text-white font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newIdInput.trim() || newPasswordInput.trim().length < 4) {
-                    onNotify(
-                      'warning',
-                      'Thông tin chưa hợp lệ',
-                      'Vui lòng nhập ID và mật khẩu mới ít nhất 4 ký tự.'
-                    );
-                    return;
-                  }
-                  onChangeCredentials(newIdInput.trim(), newPasswordInput.trim());
-                  setNewPasswordInput('');
-                  setShowCredentialsChange(false);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950 text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
-              >
-                Lưu thay đổi
-              </button>
-            </div>
-          </div>
-        )}
+        <AnimatePresence>
+          {showCredentialsChange && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, y: -8 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -8 }}
+              className="rounded-2xl bg-slate-900/50 backdrop-blur-2xl border border-emerald-400/30 p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3"
+            >
+              <div className="text-xs text-[#94A3B8]">
+                <span className="font-semibold text-[#F8FAFC]">
+                  Cập nhật tài khoản Quản trị viên:
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={newIdInput}
+                  onChange={(e) => setNewIdInput(e.target.value)}
+                  placeholder="ID Admin mới..."
+                  className="px-3 py-1.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/50 focus:outline-none text-xs text-[#F8FAFC] font-mono"
+                />
+                <input
+                  type="password"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="Mật khẩu mới..."
+                  className="px-3 py-1.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/50 focus:outline-none text-xs text-[#F8FAFC] font-mono"
+                />
+                <motion.button
+                  whileHover={{ y: -2, scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  type="button"
+                  onClick={() => {
+                    if (!newIdInput.trim() || newPasswordInput.trim().length < 4) {
+                      onNotify(
+                        'warning',
+                        'Thông tin chưa hợp lệ',
+                        'Vui lòng nhập ID và mật khẩu mới ít nhất 4 ký tự.'
+                      );
+                      return;
+                    }
+                    onChangeCredentials(newIdInput.trim(), newPasswordInput.trim());
+                    setNewPasswordInput('');
+                    setShowCredentialsChange(false);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#10B981] to-[#06B6D4] text-slate-950 text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  Lưu thay đổi
+                </motion.button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* GRID: 1. ADD/TRAIN SOP FORM (LEFT 7 COLS) & 2. BULK IMPORT + AI ENGINE SETTINGS (RIGHT 5 COLS) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* 1. Form Nạp Quy Trình Mới (Add/Train SOP Item) */}
-          <form
+          <motion.form
+            variants={itemVariants}
             onSubmit={handleSaveForm}
-            className="lg:col-span-7 rounded-xl bg-[#1E293B]/75 backdrop-blur-md border border-white/10 p-6 space-y-5"
+            className="lg:col-span-7 rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 space-y-5 transition-colors duration-300"
           >
             <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3.5">
               <div className="flex items-center gap-2.5">
-                <PlusCircle className="w-5 h-5 text-cyan-400 shrink-0" />
-                <h2 className="text-base font-bold text-white">
+                <PlusCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                <h2 className="text-base font-bold text-[#F8FAFC]">
                   {editingId
                     ? 'Đang Chỉnh Sửa Quy Trình'
                     : '1. Nạp Quy Trình Mới Cho Bot Học (Add / Train SOP)'}
@@ -628,7 +714,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="text-xs text-slate-400 hover:text-white cursor-pointer"
+                  className="text-xs text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer"
                 >
                   Hủy chỉnh sửa
                 </button>
@@ -636,7 +722,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-slate-200">
+              <label className="block text-xs font-medium text-[#F8FAFC]">
                 Tên quy trình / Chủ đề ATSH *
               </label>
               <input
@@ -645,14 +731,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="VD: Quy trình kiểm tra & sát trùng xe vận chuyển cám..."
-                className="w-full px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-white/15 focus:border-cyan-400 focus:outline-none text-sm text-white"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/75 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC] transition-colors"
               />
             </div>
 
             {/* Khu Vực (Add / Thêm Khu Vực + Chọn Loại Vùng tương ứng) Section */}
-            <div className="p-4 rounded-xl bg-[#0F172A] border border-white/10 space-y-3.5">
+            <div className="p-4 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/10 space-y-3.5">
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-cyan-300">
+                <label className="block text-xs font-semibold text-emerald-300">
                   Khu Vực & Loại Vùng Tương Ứng *
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
@@ -667,7 +753,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       }
                     }}
                     placeholder="Nhập tên Khu Vực (VD: Khu Cách Ly, Trạm Rửa Xe, Chuồng Đẻ)..."
-                    className="sm:col-span-5 px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-cyan-500/40 focus:border-cyan-400 focus:outline-none text-sm text-white"
+                    className="sm:col-span-5 px-3.5 py-2.5 rounded-xl bg-[#060B14]/80 border border-emerald-500/30 focus:border-emerald-400 focus:outline-none text-sm text-[#F8FAFC]"
                   />
                   <select
                     value={newAreaZoneType}
@@ -679,30 +765,32 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           | 'Vùng Đỏ ( rủi ro cao )'
                       )
                     }
-                    className="sm:col-span-4 px-3 py-2.5 rounded-lg bg-[#0B1120] border border-cyan-500/40 focus:border-cyan-400 focus:outline-none text-sm font-semibold text-white"
+                    className="sm:col-span-4 px-3 py-2.5 rounded-xl bg-[#060B14]/80 border border-emerald-500/30 focus:border-emerald-400 focus:outline-none text-sm font-semibold text-[#F8FAFC]"
                   >
                     <option value="Vùng Xanh">■ Vùng Xanh</option>
                     <option value="Vùng Vàng ( rủi ro )">▲ Vùng Vàng ( rủi ro )</option>
                     <option value="Vùng Đỏ ( rủi ro cao )">● Vùng Đỏ ( rủi ro cao )</option>
                   </select>
-                  <button
+                  <motion.button
+                    whileHover={{ y: -2, scale: 1.01 }}
+                    whileTap={{ scale: 0.97 }}
                     type="button"
                     onClick={handleAddArea}
-                    className="sm:col-span-3 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                    className="sm:col-span-3 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-to-r from-[#10B981] to-[#06B6D4] text-slate-950 font-bold text-xs shadow-[0_0_15px_rgba(16,185,129,0.25)] cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>Thêm Khu Vực</span>
-                  </button>
+                  </motion.button>
                 </div>
               </div>
 
               {/* Selected Areas for current SOP (Each has its corresponding Zone Type box) */}
               <div className="space-y-2">
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[11px] text-[#94A3B8]">
                   Danh sách Khu Vực & Loại Vùng đang áp dụng ({selectedAreas.length}):
                 </div>
                 {selectedAreas.length === 0 ? (
-                  <div className="text-xs text-amber-400 py-1">
+                  <div className="text-xs text-amber-300 py-1">
                     Chưa có Khu Vực nào được chọn. Hãy nhập tên Khu Vực, chọn Loại Vùng và nhấn &ldquo;Thêm Khu Vực&rdquo;.
                   </div>
                 ) : (
@@ -711,22 +799,22 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       const parsed = parseAreaItem(area);
                       const selectBorderClass =
                         parsed.zoneType === 'Vùng Đỏ ( rủi ro cao )'
-                          ? 'border-red-500/50 text-red-300 bg-red-950/30'
+                          ? 'bg-rose-500/10 border-rose-500/30 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
                           : parsed.zoneType === 'Vùng Vàng ( rủi ro )'
-                          ? 'border-amber-500/50 text-amber-300 bg-amber-950/30'
-                          : 'border-emerald-500/50 text-emerald-300 bg-emerald-950/30';
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
 
                       return (
                         <div
                           key={`${idx}-${parsed.zoneType}`}
-                          className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2 rounded-lg bg-[#0B1120] border border-white/10"
+                          className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2 rounded-xl bg-[#060B14]/70 border border-white/10"
                         >
                           <input
                             type="text"
                             value={parsed.name}
                             onChange={(e) => handleUpdateSelectedAreaName(idx, e.target.value)}
                             placeholder="Tên Khu Vực..."
-                            className="sm:col-span-6 px-3 py-1.5 rounded bg-[#1E293B] border border-white/10 text-xs font-medium text-white focus:border-cyan-400 focus:outline-none"
+                            className="sm:col-span-6 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs font-medium text-[#F8FAFC] focus:border-emerald-400 focus:outline-none"
                           />
                           <select
                             value={parsed.zoneType}
@@ -739,15 +827,21 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                   | 'Vùng Đỏ ( rủi ro cao )'
                               )
                             }
-                            className={`sm:col-span-5 px-3 py-1.5 rounded border text-xs font-semibold focus:outline-none ${selectBorderClass}`}
+                            className={`sm:col-span-5 px-3 py-1.5 rounded-lg border text-xs font-semibold focus:outline-none ${selectBorderClass}`}
                           >
-                            <option value="Vùng Xanh" className="bg-[#0B1120] text-emerald-300">
+                            <option value="Vùng Xanh" className="bg-[#060B14] text-emerald-300">
                               ■ Vùng Xanh
                             </option>
-                            <option value="Vùng Vàng ( rủi ro )" className="bg-[#0B1120] text-amber-300">
+                            <option
+                              value="Vùng Vàng ( rủi ro )"
+                              className="bg-[#060B14] text-amber-300"
+                            >
                               ▲ Vùng Vàng ( rủi ro )
                             </option>
-                            <option value="Vùng Đỏ ( rủi ro cao )" className="bg-[#0B1120] text-red-300">
+                            <option
+                              value="Vùng Đỏ ( rủi ro cao )"
+                              className="bg-[#060B14] text-rose-300"
+                            >
                               ● Vùng Đỏ ( rủi ro cao )
                             </option>
                           </select>
@@ -755,7 +849,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             <button
                               type="button"
                               onClick={() => handleRemoveSelectedArea(area)}
-                              className="p-1.5 rounded bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-300 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg bg-white/[0.04] hover:bg-rose-500/20 text-[#94A3B8] hover:text-rose-300 transition-colors cursor-pointer"
                               title="Xóa Khu Vực này"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -771,7 +865,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               {/* Saved Area Catalog Quick-Add */}
               {areaCatalog.length > 0 && (
                 <div className="space-y-1.5 pt-2 border-t border-white/10">
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-[11px] text-[#94A3B8]">
                     Danh mục Khu Vực đã lưu (Nhấn để chọn / bỏ chọn nhanh — tự động đồng bộ sang Quy Trình Hệ Thống):
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -782,8 +876,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           key={areaItem}
                           className={`inline-flex items-center rounded-lg border text-xs transition-colors ${
                             isPicked
-                              ? 'bg-[#1E293B] border-cyan-500/50 text-cyan-300'
-                              : 'bg-[#0B1120] border-white/10 text-slate-300 hover:border-white/25'
+                              ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
+                              : 'bg-[#060B14]/70 border-white/10 text-[#94A3B8] hover:border-white/25 hover:text-[#F8FAFC]'
                           }`}
                         >
                           <button
@@ -797,7 +891,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleDeleteFromCatalog(areaItem)}
-                            className="px-1.5 py-1 text-slate-500 hover:text-red-400 border-l border-white/10 cursor-pointer"
+                            className="px-1.5 py-1 text-slate-500 hover:text-rose-400 border-l border-white/10 cursor-pointer"
                             title="Xóa khỏi danh mục lưu"
                           >
                             <X className="w-3 h-3" />
@@ -810,7 +904,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               )}
 
               <div className="space-y-1.5 pt-2 border-t border-white/10">
-                <label className="block text-xs font-medium text-slate-200">
+                <label className="block text-xs font-medium text-[#F8FAFC]">
                   Từ khóa nhận diện (Tags cách nhau bằng dấu phẩy)
                 </label>
                 <input
@@ -818,34 +912,38 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   value={tagsInput}
                   onChange={(e) => setTagsInput(e.target.value)}
                   placeholder="VD: xe cám, bồn cám, phun sương, sát trùng cổng, vùng đỏ"
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-white/15 focus:border-cyan-400 focus:outline-none text-sm text-white"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC]"
                 />
               </div>
             </div>
 
             {/* Image Selection / Upload / Preset Picker */}
-            <div className="space-y-2.5 p-4 rounded-xl bg-[#0F172A] border border-white/10">
+            <div className="space-y-2.5 p-4 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/10">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-xs font-medium text-slate-200">
+                <label className="text-xs font-medium text-[#F8FAFC]">
                   Hình ảnh minh họa quy trình (URL, Upload Base64 hoặc Chọn ảnh mẫu ATSH):
                 </label>
                 <div className="flex items-center gap-2">
-                  <button
+                  <motion.button
+                    whileHover={{ y: -2, scale: 1.01 }}
+                    whileTap={{ scale: 0.97 }}
                     type="button"
                     onClick={() => setShowPresetGallery((prev) => !prev)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-xs font-semibold text-cyan-300 border border-cyan-500/30 cursor-pointer whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-xs font-semibold text-emerald-300 border border-emerald-500/30 cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <ImageIcon className="w-3.5 h-3.5" />
                     {showPresetGallery ? 'Ẩn bộ ảnh mẫu ATSH' : 'Chọn ảnh mẫu ATSH (6 ảnh)'}
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ y: -2, scale: 1.01 }}
+                    whileTap={{ scale: 0.97 }}
                     type="button"
                     onClick={() => imageFileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs font-medium text-[#F8FAFC] border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <Upload className="w-3.5 h-3.5" />
                     Upload ảnh (Base64)
-                  </button>
+                  </motion.button>
                   <input
                     ref={imageFileInputRef}
                     type="file"
@@ -862,9 +960,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
                   placeholder="Dán link hình ảnh hoặc chọn từ thư viện mẫu..."
-                  className="flex-1 px-3.5 py-2 rounded-lg bg-[#0B1120] border border-white/15 focus:border-cyan-400 focus:outline-none text-xs text-slate-200 font-mono"
+                  className="flex-1 px-3.5 py-2 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-xs text-[#F8FAFC] font-mono"
                 />
-                <div className="w-20 h-12 rounded-lg overflow-hidden border border-white/15 shrink-0 bg-[#0B1120]">
+                <div className="w-20 h-12 rounded-lg overflow-hidden border border-white/15 shrink-0 bg-[#060B14]">
                   <ResilientImage
                     src={imageUrl}
                     alt="Preview"
@@ -886,13 +984,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         setImageUrl(preset.url);
                         setShowPresetGallery(false);
                       }}
-                      className={`group text-left rounded-lg overflow-hidden border transition-all cursor-pointer ${
+                      className={`group text-left rounded-xl overflow-hidden border transition-all cursor-pointer ${
                         imageUrl === preset.url
-                          ? 'border-cyan-400 ring-1 ring-cyan-400'
-                          : 'border-white/10 hover:border-white/30'
+                          ? 'border-emerald-400 ring-1 ring-emerald-400'
+                          : 'border-white/10 hover:border-emerald-400/40'
                       }`}
                     >
-                      <div className="h-20 w-full overflow-hidden bg-[#0B1120]">
+                      <div className="h-20 w-full overflow-hidden bg-[#060B14]">
                         <img
                           src={preset.url}
                           alt={preset.title}
@@ -900,8 +998,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
                       </div>
-                      <div className="p-2 bg-[#0B1120]">
-                        <div className="text-[11px] font-medium text-slate-200 line-clamp-1">
+                      <div className="p-2 bg-[#060B14]/90">
+                        <div className="text-[11px] font-medium text-[#F8FAFC] line-clamp-1">
                           {preset.title}
                         </div>
                       </div>
@@ -913,35 +1011,35 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
             {/* Key Metrics Editor */}
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-slate-200">
+              <label className="block text-xs font-medium text-[#F8FAFC]">
                 Thông số kỹ thuật định lượng chính (Hiển thị bảng số liệu nhanh):
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {metrics.map((m, idx) => (
                   <div
                     key={idx}
-                    className="p-2.5 rounded-lg bg-[#0B1120] border border-white/10 grid grid-cols-12 gap-1.5"
+                    className="p-2.5 rounded-xl bg-[#060B14]/70 border border-white/10 grid grid-cols-12 gap-1.5"
                   >
                     <input
                       type="text"
                       value={m.label}
                       onChange={(e) => handleMetricChange(idx, 'label', e.target.value)}
                       placeholder="Tên thông số (VD: Áp lực)"
-                      className="col-span-6 px-2 py-1 rounded bg-[#1E293B] text-xs text-white"
+                      className="col-span-6 px-2 py-1 rounded-lg bg-white/[0.04] text-xs text-[#F8FAFC]"
                     />
                     <input
                       type="text"
                       value={m.value}
                       onChange={(e) => handleMetricChange(idx, 'value', e.target.value)}
                       placeholder="150–200"
-                      className="col-span-3 px-2 py-1 rounded bg-[#1E293B] text-xs text-cyan-300 font-mono"
+                      className="col-span-3 px-2 py-1 rounded-lg bg-white/[0.04] text-xs text-emerald-300 font-mono"
                     />
                     <input
                       type="text"
                       value={m.unit}
                       onChange={(e) => handleMetricChange(idx, 'unit', e.target.value)}
                       placeholder="bar"
-                      className="col-span-3 px-2 py-1 rounded bg-[#1E293B] text-xs text-slate-300 font-mono"
+                      className="col-span-3 px-2 py-1 rounded-lg bg-white/[0.04] text-xs text-[#94A3B8] font-mono"
                     />
                   </div>
                 ))}
@@ -951,7 +1049,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             {/* Summary & Critical Warning */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-slate-200">
+                <label className="block text-xs font-medium text-[#F8FAFC]">
                   Tóm tắt ngắn quy trình
                 </label>
                 <textarea
@@ -959,11 +1057,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
                   placeholder="Tóm tắt 1-2 câu hiển thị trên thẻ Thư viện SOP..."
-                  className="w-full px-3.5 py-2 rounded-lg bg-[#0B1120] border border-white/15 focus:border-cyan-400 focus:outline-none text-xs text-white"
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#060B14]/75 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-xs text-[#F8FAFC]"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-red-300">
+                <label className="block text-xs font-medium text-rose-300">
                   Cảnh báo rủi ro (Lưu ý sống còn)
                 </label>
                 <textarea
@@ -971,14 +1069,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   value={criticalWarning}
                   onChange={(e) => setCriticalWarning(e.target.value)}
                   placeholder="VD: Tuyệt đối không cho xe vào trại khi chưa khô hoàn toàn..."
-                  className="w-full px-3.5 py-2 rounded-lg bg-[#0B1120] border border-red-500/30 focus:border-red-400 focus:outline-none text-xs text-white"
+                  className="w-full px-3.5 py-2 rounded-xl bg-[#060B14]/75 border border-rose-500/30 focus:border-rose-400 focus:outline-none text-xs text-[#F8FAFC]"
                 />
               </div>
             </div>
 
             {/* Detailed Content for AI RAG */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-slate-200">
+              <label className="block text-xs font-medium text-[#F8FAFC]">
                 Nội dung chi tiết quy trình (Dữ liệu chuẩn để Bot học - Hỗ trợ Markdown) *
               </label>
               <textarea
@@ -987,54 +1085,63 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Dán toàn bộ các bước thực hiện, thông số kỹ thuật (thời gian, nhiệt độ, nồng độ pha thuốc, khoảng cách an toàn), tiêu chí kiểm tra Đạt / Không đạt..."
-                className="w-full px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-white/15 focus:border-cyan-400 focus:outline-none text-sm text-white font-sans leading-relaxed"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/75 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC] font-sans leading-relaxed"
               />
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
               {editingId && (
-                <button
+                <motion.button
+                  whileHover={{ y: -2, scale: 1.01 }}
+                  whileTap={{ scale: 0.97 }}
                   type="button"
                   onClick={resetForm}
-                  className="px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-medium text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer"
                 >
                   Hủy
-                </button>
+                </motion.button>
               )}
-              <button
+              <motion.button
+                whileHover={{ y: -2, scale: 1.01 }}
+                whileTap={{ scale: 0.97 }}
                 type="submit"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-[#06B6D4] to-[#3B82F6] hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold text-sm transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#10B981] via-[#06B6D4] to-[#3B82F6] text-slate-950 font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 <span>{editingId ? 'Cập Nhật Quy Trình SOP' : 'Lưu & Nạp Vào Bộ Nhớ AI'}</span>
-              </button>
+              </motion.button>
             </div>
-          </form>
+          </motion.form>
 
           {/* RIGHT COLUMN: 2. BULK IMPORT/EXPORT & 4. AI ENGINE SETTINGS */}
           <div className="lg:col-span-5 space-y-6">
             {/* 2. Nạp Nhanh Từ File (Bulk Import/Export) */}
-            <div className="rounded-xl bg-[#1E293B]/75 backdrop-blur-md border border-white/10 p-6 space-y-4">
+            <motion.div
+              variants={itemVariants}
+              className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 space-y-4 transition-colors duration-300"
+            >
               <div className="flex items-center gap-2.5 border-b border-white/10 pb-3">
                 <FileUp className="w-5 h-5 text-cyan-400 shrink-0" />
-                <h2 className="text-base font-bold text-white">
+                <h2 className="text-base font-bold text-[#F8FAFC]">
                   2. Nạp Nhanh Từ File & Sao Lưu (Bulk Import / Export)
                 </h2>
               </div>
 
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Hỗ trợ tải lên file <code className="text-cyan-300 font-mono">.TXT</code> (phân tách các quy trình bằng dòng <code className="font-mono">---</code>), <code className="text-cyan-300 font-mono">.CSV</code> hoặc <code className="text-cyan-300 font-mono">.JSON</code> để nạp hàng loạt quy trình vào Knowledge Base.
+              <p className="text-xs text-[#94A3B8] leading-relaxed">
+                Hỗ trợ tải lên file <code className="text-emerald-300 font-mono">.TXT</code> (phân tách các quy trình bằng dòng <code className="font-mono">---</code>), <code className="text-emerald-300 font-mono">.CSV</code> hoặc <code className="text-emerald-300 font-mono">.JSON</code> để nạp hàng loạt quy trình vào Knowledge Base.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
+                <motion.button
+                  whileHover={{ y: -3, scale: 1.01 }}
+                  whileTap={{ scale: 0.97 }}
                   type="button"
                   onClick={() => bulkFileInputRef.current?.click()}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-[#0F172A] hover:bg-cyan-500/15 border border-cyan-500/30 text-xs font-semibold text-cyan-300 transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-semibold text-emerald-300 transition-colors cursor-pointer"
                 >
                   <Upload className="w-4 h-4" />
                   <span>Nạp thêm từ .TXT / .CSV / .JSON</span>
-                </button>
+                </motion.button>
                 <input
                   ref={bulkFileInputRef}
                   type="file"
@@ -1043,21 +1150,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   className="hidden"
                 />
 
-                <button
+                <motion.button
+                  whileHover={{ y: -3, scale: 1.01 }}
+                  whileTap={{ scale: 0.97 }}
                   type="button"
                   onClick={handleExportJson}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-[#0F172A] hover:bg-slate-800 border border-white/15 text-xs font-semibold text-slate-200 transition-colors cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-emerald-400/40 text-xs font-semibold text-[#F8FAFC] transition-colors cursor-pointer"
                 >
                   <Download className="w-4 h-4 text-emerald-400" />
                   <span>Export Sao Lưu (.JSON)</span>
-                </button>
+                </motion.button>
               </div>
 
               <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() => restoreJsonInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-cyan-300 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs text-[#94A3B8] hover:text-emerald-300 cursor-pointer transition-colors"
                 >
                   <Upload className="w-3.5 h-3.5" />
                   Khôi phục toàn bộ từ bản sao lưu (.JSON)
@@ -1073,45 +1182,48 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <button
                   type="button"
                   onClick={onResetSeedData}
-                  className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs text-amber-300 hover:text-amber-200 cursor-pointer transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Khôi phục 5 quy trình mẫu mặc định
                 </button>
               </div>
-            </div>
+            </motion.div>
 
             {/* 4. Cấu Hình AI (AI Engine Settings) */}
-            <div className="rounded-xl bg-[#1E293B]/75 backdrop-blur-md border border-white/10 p-6 space-y-4">
+            <motion.div
+              variants={itemVariants}
+              className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 space-y-4 transition-colors duration-300"
+            >
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div className="flex items-center gap-2.5">
                   <Cpu className="w-5 h-5 text-cyan-400 shrink-0" />
-                  <h2 className="text-base font-bold text-white">
+                  <h2 className="text-base font-bold text-[#F8FAFC]">
                     4. Cấu Hình Bộ Máy AI (AI Engine Settings)
                   </h2>
                 </div>
                 <span className="text-xs font-mono text-emerald-400">● GEMINI-3.8-FLASH</span>
               </div>
 
-              <div className="p-3.5 rounded-lg bg-[#0F172A] border border-white/10 space-y-1">
-                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
+                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>Đã kết nối tự động với môi trường Server-Side AI Studio</span>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-[#94A3B8] leading-relaxed">
                   Hệ thống sử dụng cơ chế RAG đối chiếu trực tiếp toàn bộ quy trình đang Active trong bảng bên dưới làm ngữ cảnh chuẩn (Context) khi giải đáp.
                 </p>
               </div>
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-slate-200">
+                  <label className="text-xs font-medium text-[#F8FAFC]">
                     System Prompt bổ sung (Giọng điệu & Quy tắc xưng hô):
                   </label>
                   <button
                     type="button"
                     onClick={() => setDraftSystemPrompt(DEFAULT_SYSTEM_PROMPT)}
-                    className="text-[11px] text-cyan-400 hover:underline cursor-pointer"
+                    className="text-[11px] text-emerald-400 hover:underline cursor-pointer"
                   >
                     Đặt lại mặc định
                   </button>
@@ -1120,29 +1232,34 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   rows={4}
                   value={draftSystemPrompt}
                   onChange={(e) => setDraftSystemPrompt(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg bg-[#0B1120] border border-white/15 focus:border-cyan-400 focus:outline-none text-xs text-white leading-relaxed"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/75 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-xs text-[#F8FAFC] leading-relaxed"
                 />
               </div>
 
-              <button
+              <motion.button
+                whileHover={{ y: -2, scale: 1.01 }}
+                whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={() => onSaveSystemPrompt(draftSystemPrompt)}
-                className="w-full py-2.5 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/15 text-xs font-semibold text-cyan-300 transition-colors cursor-pointer"
+                className="w-full py-2.5 px-4 rounded-xl bg-white/[0.05] hover:bg-emerald-500/15 border border-white/15 hover:border-emerald-400/40 text-xs font-semibold text-emerald-300 transition-colors cursor-pointer"
               >
                 Lưu Cấu Hình System Prompt
-              </button>
-            </div>
+              </motion.button>
+            </motion.div>
           </div>
         </div>
 
         {/* 3. DANH SÁCH DỮ LIỆU ĐÃ NẠP (CRUD TABLE) */}
-        <div className="rounded-xl bg-[#1E293B]/75 backdrop-blur-md border border-white/10 overflow-hidden">
-          <div className="px-6 py-4 bg-[#0F172A] border-b border-white/10 flex flex-wrap items-center justify-between gap-4">
+        <motion.div
+          variants={itemVariants}
+          className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 transition-colors duration-300"
+        >
+          <div className="px-6 py-4 bg-white/[0.02] border-b border-white/10 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-base font-bold text-white">
+              <h2 className="text-base font-bold text-[#F8FAFC]">
                 3. Danh Sách Quy Trình Đã Nạp Trong Bộ Nhớ AI ({sops.length} Quy trình)
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#94A3B8]">
                 Bật/Tắt trạng thái Active để cho phép hoặc tạm ngưng Bot sử dụng quy trình đó khi trả lời nhân viên.
               </p>
             </div>
@@ -1151,13 +1268,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/10 bg-[#0B1120]/60 text-[11px] font-mono text-slate-400">
-                  <th className="py-3 px-4">HÌNH ẢNH</th>
-                  <th className="py-3 px-4">MÃ & TÊN QUY TRÌNH SOP</th>
-                  <th className="py-3 px-4">KHU VỰC</th>
-                  <th className="py-3 px-4">TỪ KHÓA NHẬN DIỆN</th>
-                  <th className="py-3 px-4">TRẠNG THÁI AI HỌC</th>
-                  <th className="py-3 px-4 text-right">THAO TÁC</th>
+                <tr className="border-b border-white/10 bg-[#060B14]/60 text-[11px] font-mono text-[#94A3B8]">
+                  <th className="py-3.5 px-4">HÌNH ẢNH</th>
+                  <th className="py-3.5 px-4">MÃ & TÊN QUY TRÌNH SOP</th>
+                  <th className="py-3.5 px-4">KHU VỰC</th>
+                  <th className="py-3.5 px-4">TỪ KHÓA NHẬN DIỆN</th>
+                  <th className="py-3.5 px-4">TRẠNG THÁI AI HỌC</th>
+                  <th className="py-3.5 px-4 text-right">THAO TÁC</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10 text-sm">
@@ -1166,12 +1283,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   return (
                     <tr
                       key={sop.id}
-                      className={`hover:bg-[#0F172A]/60 transition-colors ${
+                      className={`hover:bg-white/[0.03] transition-colors ${
                         !sop.active ? 'opacity-60' : ''
                       }`}
                     >
-                      <td className="py-3 px-4 w-24">
-                        <div className="w-20 h-12 rounded-lg overflow-hidden border border-white/15 bg-[#0B1120] relative">
+                      <td className="py-3.5 px-4 w-24">
+                        <div className="w-20 h-12 rounded-lg overflow-hidden border border-white/15 bg-[#060B14] relative">
                           <ResilientImage
                             src={sop.imageUrl}
                             alt={sop.title}
@@ -1191,43 +1308,50 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         </div>
                       </td>
 
-                      <td className="py-3 px-4 max-w-md">
+                      <td className="py-3.5 px-4 max-w-md">
                         <div className="font-mono text-xs text-cyan-400">{sop.code}</div>
-                        <div className="font-semibold text-white line-clamp-1">{sop.title}</div>
-                        <div className="text-xs text-slate-400 line-clamp-1 mt-0.5">
+                        <div className="font-semibold text-[#F8FAFC] line-clamp-1">{sop.title}</div>
+                        <div className="text-xs text-[#94A3B8] line-clamp-1 mt-0.5">
                           {sop.summary}
                         </div>
                       </td>
 
-                      <td className="py-3 px-4">
-                        <span className={`text-xs font-semibold ${zoneStyle.textColor}`}>
-                          {zoneStyle.glyph} {sop.zoneLabel || zoneStyle.shortTag}
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${zoneStyle.badgeClass}`}
+                        >
+                          <span>{zoneStyle.glyph}</span>
+                          <span>{sop.zoneLabel || zoneStyle.shortTag}</span>
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 max-w-xs">
-                        <div className="text-xs text-slate-300 line-clamp-2">
+                      <td className="py-3.5 px-4 max-w-xs">
+                        <div className="text-xs text-[#94A3B8] line-clamp-2">
                           {sop.tags.join(' · ')}
                         </div>
                       </td>
 
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <button
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <motion.button
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.96 }}
                           type="button"
                           onClick={() => onToggleActiveSop(sop.id)}
                           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-semibold border transition-colors cursor-pointer ${
                             sop.active
-                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                              : 'bg-slate-800 text-slate-400 border-white/10'
+                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                              : 'bg-white/[0.04] text-[#94A3B8] border-white/10'
                           }`}
                         >
                           <span>{sop.active ? '● ACTIVE (Đang học)' : '○ TẠM TẮT'}</span>
-                        </button>
+                        </motion.button>
                       </td>
 
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
-                          <button
+                          <motion.button
+                            whileHover={{ y: -2, scale: 1.04 }}
+                            whileTap={{ scale: 0.96 }}
                             type="button"
                             onClick={() =>
                               onOpenLightbox({
@@ -1238,49 +1362,54 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 caption: sop.summary,
                               })
                             }
-                            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 cursor-pointer"
+                            className="p-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] text-[#94A3B8] hover:text-[#F8FAFC] border border-white/10 cursor-pointer"
                             title="Xem ảnh minh họa"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ y: -2, scale: 1.03 }}
+                            whileTap={{ scale: 0.96 }}
                             type="button"
                             onClick={() => handleEditClick(sop)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-xs font-medium text-cyan-300 border border-cyan-500/30 cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-xs font-medium text-cyan-300 border border-cyan-500/30 cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                             Sửa
-                          </button>
+                          </motion.button>
 
                           {confirmDeleteId === sop.id ? (
                             <div className="inline-flex items-center gap-1">
-                              <button
+                              <motion.button
+                                whileTap={{ scale: 0.96 }}
                                 type="button"
                                 onClick={() => {
                                   onDeleteSop(sop.id);
                                   setConfirmDeleteId(null);
                                 }}
-                                className="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-xs font-bold text-white cursor-pointer"
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white cursor-pointer"
                               >
                                 Xác nhận xóa
-                              </button>
+                              </motion.button>
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteId(null)}
-                                className="p-1.5 rounded-lg bg-slate-800 text-slate-300 cursor-pointer"
+                                className="p-1.5 rounded-lg bg-white/[0.05] text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           ) : (
-                            <button
+                            <motion.button
+                              whileHover={{ y: -2, scale: 1.03 }}
+                              whileTap={{ scale: 0.96 }}
                               type="button"
                               onClick={() => setConfirmDeleteId(sop.id)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-xs font-medium text-red-300 border border-red-500/30 cursor-pointer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-xs font-medium text-rose-300 border border-rose-500/30 cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                               Xóa
-                            </button>
+                            </motion.button>
                           )}
                         </div>
                       </td>
@@ -1290,8 +1419,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 };

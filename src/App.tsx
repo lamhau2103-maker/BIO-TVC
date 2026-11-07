@@ -5,6 +5,7 @@ import {
   Info,
   X,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   BioZone,
   ChatMessage,
@@ -44,6 +45,12 @@ const DEFAULT_AREA_CATALOG = [
 const THAI_VIET_LOGO = '/assets/aistudio/23-logo-thai-viet-corporation_c66d41c5.jpeg';
 
 type ActiveTab = 'assistant' | 'library' | 'admin';
+
+const NAV_TABS: { id: ActiveTab; label: string }[] = [
+  { id: 'assistant', label: 'Tra Cứu Quy Trình' },
+  { id: 'library', label: 'Quy Trình Hệ Thống' },
+  { id: 'admin', label: 'Tài Liệu (Admin)' },
+];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('assistant');
@@ -325,84 +332,128 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0B1120] text-[#F8FAFC]">
-      {/* TOP CORPORATE BANNER + NAVIGATION BAR */}
-      <header className="sticky top-0 z-20 bg-[#0B1120]/95 backdrop-blur-md border-b border-white/10">
-        {/* Top Row: 3D Prominent Box for Logo & CÔNG TY CỔ PHẦN THÁI VIỆT CORPORATION (Centered) */}
-        <div className="border-b border-white/10 bg-gradient-to-b from-[#0E172A] to-[#060A12] py-3 px-4 sm:px-6">
+    <div className="relative min-h-screen flex flex-col bg-gradient-to-br from-[#081C34] via-[#0B4F5A] to-[#082B49] text-[#F8FAFC] overflow-x-hidden">
+      {/* 1. VIBRANT AURORA MESH GRADIENT & DOT-MATRIX BACKGROUND */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
+        {/* Vibrant Ocean / Teal / Cyan Base Gradient Layer */}
+        <div
+          className="absolute inset-0 opacity-85"
+          style={{
+            background:
+              'radial-gradient(circle at 18% 18%, rgba(13, 148, 136, 0.45) 0%, transparent 55%), radial-gradient(circle at 82% 28%, rgba(6, 182, 212, 0.4) 0%, transparent 55%), radial-gradient(circle at 50% 85%, rgba(8, 28, 52, 0.9) 0%, #081C34 100%)',
+          }}
+        />
+
+        {/* Aurora Orb 1: Mint Green (#34D399) */}
+        <div
+          className="animate-aurora-mint absolute -top-24 -left-20 w-[560px] h-[560px] rounded-full blur-[110px] opacity-35"
+          style={{ backgroundColor: '#34D399' }}
+        />
+
+        {/* Aurora Orb 2: Aqua (#22D3EE) */}
+        <div
+          className="animate-aurora-aqua absolute top-1/5 -right-24 w-[600px] h-[600px] rounded-full blur-[110px] opacity-35"
+          style={{ backgroundColor: '#22D3EE' }}
+        />
+
+        {/* Aurora Orb 3: Sky Blue (#38BDF8) */}
+        <div
+          className="animate-aurora-sky absolute -bottom-28 left-1/4 w-[640px] h-[640px] rounded-full blur-[110px] opacity-35"
+          style={{ backgroundColor: '#38BDF8' }}
+        />
+
+        {/* Crisp Modern Dot-Matrix Grid Overlay (radial-gradient white opacity 0.07) */}
+        <div className="absolute inset-0 bg-aurora-dot-grid" />
+      </div>
+
+      {/* 2. HEADER & CORPORATE BANNER (VIBRANT BIO-AURORA GLASSMORPHISM) */}
+      <header className="sticky top-0 z-20 bg-[#081C34]/55 backdrop-blur-2xl border-b border-cyan-300/25 shadow-[0_8px_32px_0_rgba(6,182,212,0.18)] ring-1 ring-inset ring-white/10">
+        {/* Top Row: Clear Frosted Glass Box with Shimmer & Gradient Text for CÔNG TY CỔ PHẦN THÁI VIỆT CORPORATION */}
+        <div className="border-b border-cyan-300/20 bg-gradient-to-r from-[#081C34]/60 via-[#0D9488]/25 to-[#081C34]/60 py-3 px-4 sm:px-6">
           <div className="max-w-[1380px] mx-auto flex justify-center">
-            <div className="inline-flex items-center justify-center gap-4 px-5 sm:px-8 py-2.5 rounded-2xl bg-gradient-to-b from-[#1E293B] via-[#0F172A] to-[#090E1A] border border-cyan-400/40 shadow-[0_12px_28px_-6px_rgba(0,0,0,0.9),0_4px_18px_-2px_rgba(6,182,212,0.3),inset_0_1px_1px_rgba(255,255,255,0.35),inset_0_-3px_6px_rgba(0,0,0,0.8)] transform hover:-translate-y-0.5 transition-transform duration-150">
-              <div className="rounded-xl bg-gradient-to-b from-white via-slate-50 to-slate-200 p-1.5 border border-white shadow-[0_6px_14px_rgba(0,0,0,0.65),inset_0_2px_1px_rgba(255,255,255,1),inset_0_-2px_3px_rgba(148,163,184,0.7)] shrink-0">
+            <motion.div
+              whileHover={{ y: -2, scale: 1.01 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              className="relative overflow-hidden inline-flex items-center justify-center gap-4 px-5 sm:px-8 py-2.5 rounded-2xl bg-white/10 backdrop-blur-xl border border-cyan-300/30 shadow-[0_0_35px_rgba(34,211,238,0.2)] ring-1 ring-inset ring-white/15"
+            >
+              {/* Shimmer Sweep Effect across the Banner */}
+              <div
+                aria-hidden="true"
+                className="animate-banner-shimmer pointer-events-none absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+              />
+
+              <div className="relative z-10 rounded-xl bg-gradient-to-b from-white via-slate-50 to-cyan-50 p-1.5 border border-white shadow-[0_6px_16px_rgba(6,182,212,0.35),inset_0_2px_1px_rgba(255,255,255,1)] shrink-0">
                 <img
                   src={THAI_VIET_LOGO}
                   alt="Logo Công Ty Cổ Phần Thái Việt Corporation"
                   className="h-10 sm:h-12 w-auto object-contain block"
                 />
               </div>
-              <span className="text-base sm:text-xl md:text-2xl font-extrabold tracking-wider text-white uppercase text-center [text-shadow:0_1px_0_#94a3b8,0_2px_0_#475569,0_5px_10px_rgba(0,0,0,0.9)]">
+
+              <span className="relative z-10 text-base sm:text-xl md:text-2xl font-extrabold tracking-wider uppercase text-center bg-gradient-to-r from-white via-[#E0F2FE] to-[#A5F3FC] bg-clip-text text-transparent drop-shadow-[0_2px_10px_rgba(34,211,238,0.35)]">
                 CÔNG TY CỔ PHẦN THÁI VIỆT CORPORATION
               </span>
-            </div>
+            </motion.div>
           </div>
         </div>
 
-        {/* Bottom Row: Hệ Thống An Toàn Sinh Học + Navigation Tabs + Primary Action */}
+        {/* Bottom Row: Hệ Thống An Toàn Sinh Học + Vibrant Gradient Navigation Tabs + Primary Action */}
         <div className="max-w-[1380px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4 sm:gap-8">
           {/* Zone 1: System Title */}
-          <a
+          <motion.a
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
             href="#top"
             onClick={(e) => {
               e.preventDefault();
               setActiveTab('assistant');
             }}
-            className="text-base sm:text-lg font-bold tracking-tight text-cyan-400 whitespace-nowrap shrink-0"
+            className="text-base sm:text-lg font-extrabold tracking-tight bg-gradient-to-r from-white via-emerald-200 to-cyan-200 bg-clip-text text-transparent drop-shadow-[0_2px_8px_rgba(34,211,238,0.25)] whitespace-nowrap shrink-0"
           >
             Hệ Thống An Toàn Sinh Học
-          </a>
+          </motion.a>
 
-          {/* Zone 2: Navigation Tabs (No scrollbar) */}
-          <nav className="flex flex-wrap items-center gap-5 sm:gap-7 text-sm font-medium">
-            <button
-              type="button"
-              onClick={() => setActiveTab('assistant')}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                activeTab === 'assistant'
-                  ? 'text-cyan-400 underline underline-offset-8 decoration-2 decoration-cyan-400 font-semibold'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Tra Cứu Quy Trình
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setHighlightedSopId(null);
-                setActiveTab('library');
-              }}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                activeTab === 'library'
-                  ? 'text-cyan-400 underline underline-offset-8 decoration-2 decoration-cyan-400 font-semibold'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Quy Trình Hệ Thống
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('admin')}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                activeTab === 'admin'
-                  ? 'text-cyan-400 underline underline-offset-8 decoration-2 decoration-cyan-400 font-semibold'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Tài Liệu (Admin)
-            </button>
+          {/* Zone 2: Sliding Pill Navigation Tabs */}
+          <nav
+            aria-label="Điều hướng chính"
+            className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl bg-white/10 backdrop-blur-xl border border-cyan-300/25 shadow-[0_4px_24px_rgba(6,182,212,0.15)]"
+          >
+            {NAV_TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <motion.button
+                  key={tab.id}
+                  type="button"
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    if (tab.id === 'library') {
+                      setHighlightedSopId(null);
+                    }
+                    setActiveTab(tab.id);
+                  }}
+                  className={`relative px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer hover:scale-105 transition-all duration-300 ${
+                    isActive
+                      ? 'text-slate-950'
+                      : 'text-cyan-50/85 hover:text-white'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeTabIndicator"
+                      className="absolute inset-0 bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 rounded-xl shadow-lg shadow-cyan-400/30"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{tab.label}</span>
+                </motion.button>
+              );
+            })}
           </nav>
 
-          {/* Zone 3: 1 Primary Action */}
+          {/* Zone 3: 1 Primary Action ("Nạp Quy Trình SOP") */}
           <div className="hidden sm:flex items-center shrink-0">
-            <button
+            <motion.button
+              whileTap={{ scale: 0.97 }}
               type="button"
               onClick={() => {
                 if (activeTab !== 'admin') {
@@ -411,69 +462,79 @@ export default function App() {
                   setActiveTab('assistant');
                 }
               }}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#06B6D4] to-[#3B82F6] hover:from-cyan-400 hover:to-blue-500 text-xs font-bold text-slate-950 transition-all whitespace-nowrap shrink-0 cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 text-xs font-bold text-slate-950 shadow-lg shadow-cyan-400/30 hover:scale-105 transition-all duration-300 whitespace-nowrap shrink-0 cursor-pointer"
             >
               {activeTab === 'admin' ? 'Quay Lại Tra Cứu' : 'Nạp Quy Trình SOP'}
-            </button>
+            </motion.button>
           </div>
         </div>
       </header>
 
-      {/* MAIN WORKSPACE CONTAINER */}
-      <main className="flex-1 max-w-[1380px] w-full mx-auto px-4 sm:px-6 py-6 md:py-8">
-        {activeTab === 'assistant' && (
-          <AssistantView
-            sops={sops}
-            messages={messages}
-            isLoading={isLoadingChat}
-            onSendQuestion={handleSendQuestion}
-            onClearHistory={() => setMessages([])}
-            onOpenLightbox={handleOpenLightbox}
-            onNavigateToSopLibrary={(sopId) => {
-              setHighlightedSopId(sopId || null);
-              setActiveTab('library');
-            }}
-          />
-        )}
+      {/* MAIN WORKSPACE CONTAINER WITH POWERPOINT MORPH PAGE TRANSITION */}
+      <main className="relative z-10 flex-1 max-w-[1380px] w-full mx-auto px-4 sm:px-6 py-6 md:py-8">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 15, scale: 0.98, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -15, scale: 0.98, filter: 'blur(6px)' }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {activeTab === 'assistant' && (
+              <AssistantView
+                sops={sops}
+                messages={messages}
+                isLoading={isLoadingChat}
+                onSendQuestion={handleSendQuestion}
+                onClearHistory={() => setMessages([])}
+                onOpenLightbox={handleOpenLightbox}
+                onNavigateToSopLibrary={(sopId) => {
+                  setHighlightedSopId(sopId || null);
+                  setActiveTab('library');
+                }}
+              />
+            )}
 
-        {activeTab === 'library' && (
-          <SopLibraryView
-            sops={sops}
-            areaCatalog={areaCatalog}
-            highlightedSopId={highlightedSopId}
-            onAskAiAboutSop={handleAskAiAboutSop}
-            onOpenLightbox={handleOpenLightbox}
-          />
-        )}
+            {activeTab === 'library' && (
+              <SopLibraryView
+                sops={sops}
+                areaCatalog={areaCatalog}
+                highlightedSopId={highlightedSopId}
+                onAskAiAboutSop={handleAskAiAboutSop}
+                onOpenLightbox={handleOpenLightbox}
+              />
+            )}
 
-        {activeTab === 'admin' && (
-          <AdminPortal
-            sops={sops}
-            areaCatalog={areaCatalog}
-            onUpdateAreaCatalog={handleUpdateAreaCatalog}
-            isUnlocked={isAdminUnlocked}
-            adminId={adminId}
-            adminPassword={adminPassword}
-            systemPrompt={systemPrompt}
-            onUnlock={() => setIsAdminUnlocked(true)}
-            onLock={() => setIsAdminUnlocked(false)}
-            onBackToMain={() => setActiveTab('assistant')}
-            onChangeCredentials={handleChangeCredentials}
-            onSaveSop={handleSaveSop}
-            onDeleteSop={handleDeleteSop}
-            onToggleActiveSop={handleToggleActiveSop}
-            onBulkAddSops={handleBulkAddSops}
-            onResetSeedData={handleResetSeedData}
-            onSaveSystemPrompt={handleSaveSystemPrompt}
-            onNotify={addToast}
-            onOpenLightbox={handleOpenLightbox}
-          />
-        )}
+            {activeTab === 'admin' && (
+              <AdminPortal
+                sops={sops}
+                areaCatalog={areaCatalog}
+                onUpdateAreaCatalog={handleUpdateAreaCatalog}
+                isUnlocked={isAdminUnlocked}
+                adminId={adminId}
+                adminPassword={adminPassword}
+                systemPrompt={systemPrompt}
+                onUnlock={() => setIsAdminUnlocked(true)}
+                onLock={() => setIsAdminUnlocked(false)}
+                onBackToMain={() => setActiveTab('assistant')}
+                onChangeCredentials={handleChangeCredentials}
+                onSaveSop={handleSaveSop}
+                onDeleteSop={handleDeleteSop}
+                onToggleActiveSop={handleToggleActiveSop}
+                onBulkAddSops={handleBulkAddSops}
+                onResetSeedData={handleResetSeedData}
+                onSaveSystemPrompt={handleSaveSystemPrompt}
+                onNotify={addToast}
+                onOpenLightbox={handleOpenLightbox}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
-      {/* QUIET FOOTER */}
-      <footer className="border-t border-white/10 bg-[#0B1120] py-5 px-4 sm:px-6 mt-12">
-        <div className="max-w-[1380px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+      {/* QUIET GLASSMORPHIC FOOTER */}
+      <footer className="relative z-10 border-t border-cyan-300/20 bg-[#081C34]/50 backdrop-blur-xl py-5 px-4 sm:px-6 mt-12">
+        <div className="max-w-[1380px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-cyan-100/75">
           <div>
             CÔNG TY CỔ PHẦN THÁI VIỆT CORPORATION — Hệ Thống An Toàn Sinh Học
           </div>
@@ -481,7 +542,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('assistant')}
-              className="hover:text-white transition-colors cursor-pointer"
+              className="hover:text-[#F8FAFC] transition-colors cursor-pointer"
             >
               Tra Cứu Quy Trình
             </button>
@@ -489,7 +550,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('library')}
-              className="hover:text-white transition-colors cursor-pointer"
+              className="hover:text-[#F8FAFC] transition-colors cursor-pointer"
             >
               Quy Trình Hệ Thống
             </button>
@@ -497,9 +558,9 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('admin')}
-              className="hover:text-white transition-colors cursor-pointer"
+              className="hover:text-[#F8FAFC] transition-colors cursor-pointer"
             >
-              Nạp ( Admin )
+              Tài Liệu (Admin)
             </button>
           </div>
         </div>
@@ -517,35 +578,39 @@ export default function App() {
       />
 
       {/* TOAST NOTIFICATIONS */}
-      {toasts.length > 0 && (
-        <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
+      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
+        <AnimatePresence>
           {toasts.map((t) => (
-            <div
+            <motion.div
               key={t.id}
-              className="pointer-events-auto rounded-xl bg-[#0F172A] border border-white/15 p-4 shadow-2xl flex items-start gap-3"
+              initial={{ opacity: 0, y: 16, scale: 0.95, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: 10, scale: 0.95, filter: 'blur(4px)' }}
+              transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+              className="pointer-events-auto rounded-2xl bg-[#081C34]/85 backdrop-blur-2xl border border-cyan-300/30 p-4 shadow-[0_8px_32px_0_rgba(6,182,212,0.28)] ring-1 ring-inset ring-white/15 flex items-start gap-3"
             >
               {t.type === 'success' ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-300 shrink-0 mt-0.5" />
               ) : t.type === 'warning' || t.type === 'error' ? (
-                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" />
               ) : (
-                <Info className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+                <Info className="w-5 h-5 text-cyan-300 shrink-0 mt-0.5" />
               )}
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-bold text-white">{t.title}</div>
-                <div className="text-xs text-slate-300 mt-0.5 leading-relaxed">{t.message}</div>
+                <div className="text-xs font-bold text-[#F8FAFC]">{t.title}</div>
+                <div className="text-xs text-cyan-100/80 mt-0.5 leading-relaxed">{t.message}</div>
               </div>
               <button
                 type="button"
                 onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}
-                className="text-slate-400 hover:text-white cursor-pointer"
+                className="text-cyan-200/70 hover:text-[#F8FAFC] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
-            </div>
+            </motion.div>
           ))}
-        </div>
-      )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

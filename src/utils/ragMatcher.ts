@@ -244,48 +244,59 @@ export function getZoneSemanticStyle(zone: BioZone): {
   textColor: string;
   borderColor: string;
   surfaceBg: string;
+  badgeClass: string;
   shortTag: string;
 } {
   switch (zone) {
     case 'RED':
       return {
         glyph: '●',
-        textColor: 'text-[#EF4444]',
-        borderColor: 'border-[#EF4444]/35',
-        surfaceBg: 'bg-[#EF4444]/10',
-        shortTag: 'VÙNG ĐỎ · NGOẠI VI',
+        textColor: 'text-rose-300',
+        borderColor: 'border-rose-500/30',
+        surfaceBg: 'bg-rose-500/10',
+        badgeClass:
+          'bg-rose-500/10 border border-rose-500/30 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]',
+        shortTag: 'VÙNG ĐỎ · RỦI RO CAO',
       };
     case 'YELLOW':
       return {
         glyph: '▲',
-        textColor: 'text-[#F59E0B]',
-        borderColor: 'border-[#F59E0B]/35',
-        surfaceBg: 'bg-[#F59E0B]/10',
-        shortTag: 'VÙNG VÀNG · VÙNG ĐỆM',
+        textColor: 'text-amber-300',
+        borderColor: 'border-amber-500/30',
+        surfaceBg: 'bg-amber-500/10',
+        badgeClass:
+          'bg-amber-500/10 border border-amber-500/30 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.12)]',
+        shortTag: 'VÙNG VÀNG · RỦI RO',
       };
     case 'RED_YELLOW':
       return {
         glyph: '◆',
-        textColor: 'text-[#F59E0B]',
-        borderColor: 'border-[#EF4444]/35',
-        surfaceBg: 'bg-gradient-to-r from-[#EF4444]/10 to-[#F59E0B]/10',
+        textColor: 'text-amber-300',
+        borderColor: 'border-rose-500/30',
+        surfaceBg: 'bg-gradient-to-r from-rose-500/10 to-amber-500/10',
+        badgeClass:
+          'bg-gradient-to-r from-rose-500/15 to-amber-500/15 border border-rose-500/30 text-amber-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]',
         shortTag: 'VÙNG ĐỎ - VÀNG · TRUNG CHUYỂN',
       };
     case 'GREEN':
       return {
         glyph: '■',
-        textColor: 'text-[#10B981]',
-        borderColor: 'border-[#10B981]/35',
-        surfaceBg: 'bg-[#10B981]/10',
-        shortTag: 'VÙNG XANH · KHU SẢN XUẤT',
+        textColor: 'text-emerald-300',
+        borderColor: 'border-emerald-500/30',
+        surfaceBg: 'bg-emerald-500/10',
+        badgeClass:
+          'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.15)]',
+        shortTag: 'VÙNG XANH · AN TOÀN',
       };
     case 'GENERAL':
     default:
       return {
         glyph: '◈',
-        textColor: 'text-[#06B6D4]',
-        borderColor: 'border-[#06B6D4]/35',
-        surfaceBg: 'bg-[#06B6D4]/10',
+        textColor: 'text-cyan-300',
+        borderColor: 'border-cyan-500/30',
+        surfaceBg: 'bg-cyan-500/10',
+        badgeClass:
+          'bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]',
         shortTag: 'QUY ĐỊNH CHUNG · ATSH',
       };
   }

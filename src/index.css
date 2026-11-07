@@ -9,7 +9,7 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #0B1120;
+    background-color: #081C34;
     color: #F8FAFC;
     letter-spacing: 0.01em;
     overflow-x: hidden;
@@ -23,6 +23,136 @@
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* 1. Vibrant Bio-Aurora Mesh Gradient Keyframes */
+@keyframes auroraMint {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0px) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate3d(65px, -45px, 0px) scale(1.12) rotate(6deg);
+  }
+  66% {
+    transform: translate3d(-45px, 35px, 0px) scale(0.94) rotate(-4deg);
+  }
+}
+
+@keyframes auroraAqua {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0px) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate3d(-70px, 40px, 0px) scale(1.1) rotate(-8deg);
+  }
+  66% {
+    transform: translate3d(50px, -50px, 0px) scale(0.93) rotate(5deg);
+  }
+}
+
+@keyframes auroraSky {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate3d(40px, -45px, 0px) scale(1.14);
+  }
+}
+
+.animate-aurora-mint {
+  animation: auroraMint 20s ease-in-out infinite;
+}
+
+.animate-aurora-aqua {
+  animation: auroraAqua 24s ease-in-out infinite;
+}
+
+.animate-aurora-sky {
+  animation: auroraSky 18s ease-in-out infinite;
+}
+
+/* Subtle Dot-Matrix Grid Overlay (radial-gradient white opacity 0.07) */
+.bg-aurora-dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1.25px, transparent 1.25px);
+  background-size: 24px 24px;
+}
+
+/* 2. Corporate Banner Shimmer Effect */
+@keyframes bannerShimmer {
+  0% {
+    transform: translateX(-140%) skewX(-20deg);
+  }
+  45%, 100% {
+    transform: translateX(240%) skewX(-20deg);
+  }
+}
+
+.animate-banner-shimmer {
+  animation: bannerShimmer 6.5s ease-in-out infinite;
+}
+
+/* 3. Center Logo Energy Core Animations */
+@keyframes logoFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: logoFloat 4s ease-in-out infinite;
+}
+
+@keyframes spinSlowClockwise {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-20s {
+  animation: spinSlowClockwise 20s linear infinite;
+}
+
+@keyframes radarPingSlow {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.24;
+  }
+  70% {
+    transform: scale(1.38);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.38);
+    opacity: 0;
+  }
+}
+
+.animate-radar-ping-4s {
+  animation: radarPingSlow 4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* 4. Floating Bio-Particles inside Chat Frame */
+@keyframes bioParticleDrift {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0px) scale(0.9);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate3d(14px, -28px, 0px) scale(1.25);
+    opacity: 0.65;
+  }
+}
+
+.animate-bio-particle {
+  animation-name: bioParticleDrift;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
 
 /* Markdown rendered content styling inside AI responses */
@@ -64,7 +194,7 @@
 }
 
 .sop-markdown strong {
-  color: #38BDF8;
+  color: #34D399;
   font-weight: 600;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
