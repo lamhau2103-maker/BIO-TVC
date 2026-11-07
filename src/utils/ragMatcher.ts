@@ -61,6 +61,13 @@ export function buildLocalRagFallback(
   const { sop, score } = findBestMatchingSop(question, activeSops);
 
   if (sop && score >= 12) {
+    const metricsBullets =
+      sop.keyMetrics.length > 0
+        ? sop.keyMetrics
+            .map((m) => `* **${m.label}:** ${m.value} ${m.unit}`)
+            .join('\n')
+        : '* **Tiêu chuẩn kiểm soát:** Tuân thủ 100% quy chuẩn phân vùng';
+
     return {
       matchedSop: sop,
       payload: {
@@ -68,10 +75,18 @@ export function buildLocalRagFallback(
         isOutOfScope: false,
         zone: sop.zone,
         zoneLabel: sop.zoneLabel,
-        summaryTitle: sop.title,
-        stepsMarkdown: `Chào Anh/Chị, **Trợ lý ATSH** trích xuất quy trình chuẩn **[${sop.code}]** từ hệ thống dữ liệu Admin như sau:\n\n${sop.content}`,
+        summaryTitle: `Tư vấn trọng tâm: ${sop.title}`,
+        stepsMarkdown:
+          `Dạ chào Anh/Chị, đối với thắc mắc này, **Trợ lý ATSH** xin chia sẻ những nội dung trọng tâm theo quy chuẩn an toàn sinh học **[${sop.code}]** như sau:\n\n` +
+          `* **Mục tiêu kỹ thuật cốt lõi:** ${sop.summary}\n\n` +
+          `**Thông số kỹ thuật then chốt bắt buộc:**\n` +
+          `${metricsBullets}\n\n` +
+          `**Lưu ý chuyên môn của chuyên gia:**\n` +
+          `1. **Tuân thủ phân vùng một chiều:** Đảm bảo triệt để ranh giới ngăn cách, không để xảy ra tiếp xúc chéo với các nguồn rủi ro dịch bệnh (ASF, PRRS, PED).\n` +
+          `2. **Thời gian tiếp xúc & Nồng độ:** Hóa chất sát trùng chỉ phát huy tối đa hiệu lực diệt khuẩn/vi rút khi đạt đủ nồng độ và thời gian ngâm/tiếp xúc theo quy định.\n` +
+          `3. **Kiểm tra trước khi chuyển bước:** Chỉ cho phép thực hiện bước tiếp theo khi đã kiểm tra thực tế và xác nhận đạt chuẩn an toàn sinh học.`,
         criticalWarning: sop.criticalWarning,
-        keyMetrics: sop.keyMetrics,
+        keyMetrics: sop.keyMetrics.slice(0, 4),
       },
     };
   }
@@ -83,8 +98,12 @@ export function buildLocalRagFallback(
       isOutOfScope: true,
       zone: 'GENERAL',
       zoneLabel: 'Khuyến Nghị Tham Khảo · Ngoài Danh Mục Admin',
-      summaryTitle: 'Khuyến nghị An toàn sinh học tham khảo ngoài danh mục chuẩn',
-      stepsMarkdown: `⚠️ **Thông tin này chưa có trong quy định chuẩn của hệ thống Admin. Dưới đây là khuyến nghị tham khảo theo tiêu chuẩn An toàn sinh học trại heo công nghệ cao:**\n\n1. **Nguyên tắc phân vùng:** Mọi hoạt động phát sinh chưa có trong danh mục SOP phải được thực hiện tại khu vực đệm (**Vùng Vàng**) hoặc ngoại vi (**Vùng Đỏ**), tuyệt đối không đưa trực tiếp vào **Vùng Xanh**.\n2. **Báo cáo phê duyệt:** Vui lòng liên hệ **Cán bộ Quản lý ATSH / Bác sĩ Thú y trưởng** để lập biên bản đánh giá rủi ro mầm bệnh (**ASF, PRRS, PED**) và cập nhật quy trình mới vào Cổng Admin.\n3. **Khử khuẩn dự phòng:** Áp dụng sát trùng bề mặt bằng **Virkon S nồng độ 1:100 (1%)** với thời gian tiếp xúc tối thiểu **30 phút**.`,
+      summaryTitle: 'Tư vấn An toàn sinh học ngoài danh mục quy trình chuẩn',
+      stepsMarkdown:
+        `Dạ thưa Anh/Chị, nội dung thắc mắc này hiện chưa nằm trong danh mục quy trình chuẩn đã nạp của hệ thống Admin trại. Với góc độ chuyên môn An toàn sinh học, Trợ lý xin chia sẻ khuyến nghị tham khảo như sau:\n\n` +
+        `1. **Nguyên tắc phân vùng an toàn:** Mọi thao tác phát sinh ngoài quy trình SOP phải được kiểm soát tại khu vực đệm (**Vùng Vàng**) hoặc ngoại vi (**Vùng Đỏ**), tuyệt đối không đưa trực tiếp vào khu vực sản xuất cốt lõi (**Vùng Xanh**).\n` +
+        `2. **Báo cáo chuyên môn:** Vui lòng liên hệ **Cán bộ Quản lý ATSH / Bác sĩ Thú y trưởng** để lập biên bản đánh giá rủi ro dịch tễ (**ASF, PRRS, PED**) và cập nhật bổ sung quy trình mới vào Cổng Admin.\n` +
+        `3. **Sát trùng dự phòng:** Áp dụng dung dịch sát trùng phổ rộng bề mặt bằng **Virkon S tỷ lệ 1:100 (1%)** với thời gian tiếp xúc tối thiểu **30 phút**.`,
       criticalWarning:
         'Nội dung câu hỏi nằm ngoài các quy trình đang Active trong Knowledge Base của Admin. Tuyệt đối không tự ý thực hiện thao tác vượt rào cản sinh học khi chưa có lệnh phê duyệt.',
       keyMetrics: [

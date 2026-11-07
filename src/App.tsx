@@ -30,7 +30,7 @@ const STORAGE_KEYS = {
   SOPS: 'bioshield_ai_sops_v1',
   ADMIN_ID: 'thaiviet_bio_admin_id_v2',
   ADMIN_PASS: 'thaiviet_bio_admin_pass_v2',
-  SYSTEM_PROMPT: 'bioshield_ai_system_prompt_v1',
+  SYSTEM_PROMPT: 'thaiviet_bio_system_prompt_v3',
   AREA_CATALOG: 'thaiviet_bio_area_catalog_v1',
 };
 

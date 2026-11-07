@@ -5,7 +5,6 @@ import {
   Send,
   Sparkles,
   RotateCcw,
-  ZoomIn,
   CheckCircle2,
   AlertTriangle,
   ArrowUpRight,
@@ -16,7 +15,6 @@ import {
   SopDocument,
 } from '../types/biosecurity';
 import { getZoneSemanticStyle } from '../utils/ragMatcher';
-import { ResilientImage } from './ResilientImage';
 
 interface AssistantViewProps {
   sops: SopDocument[];
@@ -345,91 +343,28 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                               </div>
                             )}
 
-                            {/* 4. Visual SOP Illustration Card */}
-                            {matchedSop && matchedSop.imageUrl && (
-                              <div className="rounded-xl bg-slate-950/55 backdrop-blur-xl border border-teal-300/25 hover:border-cyan-300/45 overflow-hidden transition-colors">
-                                <div className="px-4 py-2.5 border-b border-teal-300/20 flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2 text-xs text-cyan-100/80">
-                                    <span className="font-semibold text-[#F8FAFC]">
-                                      Hình Ảnh Minh Họa Quy Trình Chuẩn
-                                    </span>
-                                    <span aria-hidden="true">·</span>
-                                    <span className="font-mono text-emerald-300">
-                                      {matchedSop.code}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-3">
-                                    <motion.button
-                                      type="button"
-                                      whileHover={{ y: -2, scale: 1.02 }}
-                                      whileTap={{ scale: 0.97 }}
-                                      onClick={() => onNavigateToSopLibrary(matchedSop.id)}
-                                      className="inline-flex items-center gap-1 text-xs text-cyan-100/80 hover:text-emerald-300 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                                    >
-                                      Mở trong Quy Trình Hệ Thống
-                                      <ArrowUpRight className="w-3.5 h-3.5" />
-                                    </motion.button>
-                                    <motion.button
-                                      type="button"
-                                      whileHover={{ y: -2, scale: 1.02 }}
-                                      whileTap={{ scale: 0.97 }}
-                                      onClick={() =>
-                                        onOpenLightbox({
-                                          url: matchedSop.imageUrl,
-                                          title: matchedSop.title,
-                                          zoneLabel: matchedSop.zoneLabel,
-                                          zone: matchedSop.zone,
-                                          caption: matchedSop.summary,
-                                        })
-                                      }
-                                      className="inline-flex items-center gap-1 text-xs font-medium text-emerald-300 hover:text-cyan-200 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                                    >
-                                      <ZoomIn className="w-3.5 h-3.5" />
-                                      Phóng to (Lightbox)
-                                    </motion.button>
-                                  </div>
+                            {/* 4. Text-only Reference Link (No images per user requirement) */}
+                            {matchedSop && (
+                              <div className="pt-3 border-t border-teal-300/20 flex flex-wrap items-center justify-between gap-3 text-xs text-cyan-100/80">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-semibold text-[#F8FAFC] shrink-0">
+                                    Quy trình đối chiếu:
+                                  </span>
+                                  <span className="font-mono text-emerald-300 shrink-0">
+                                    [{matchedSop.code}]
+                                  </span>
+                                  <span className="text-[#F8FAFC] truncate">{matchedSop.title}</span>
                                 </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-12 items-stretch">
-                                  <div className="md:col-span-7 h-56 md:h-64">
-                                    <ResilientImage
-                                      src={matchedSop.imageUrl}
-                                      alt={matchedSop.title}
-                                      zone={matchedSop.zone}
-                                      containerClassName="w-full h-full relative overflow-hidden"
-                                      className="w-full h-full object-cover"
-                                      showExpandHint={true}
-                                      onExpandClick={() =>
-                                        onOpenLightbox({
-                                          url: matchedSop.imageUrl,
-                                          title: matchedSop.title,
-                                          zoneLabel: matchedSop.zoneLabel,
-                                          zone: matchedSop.zone,
-                                          caption: matchedSop.summary,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                  <div className="md:col-span-5 p-4 flex flex-col justify-between bg-white/[0.03]">
-                                    <div className="space-y-2.5">
-                                      <span
-                                        className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold ${zoneStyle.badgeClass}`}
-                                      >
-                                        {zoneStyle.glyph} {matchedSop.zoneLabel}
-                                      </span>
-                                      <h4 className="text-sm font-semibold text-[#F8FAFC] leading-snug">
-                                        {matchedSop.title}
-                                      </h4>
-                                      <p className="text-xs text-cyan-100/80 leading-relaxed">
-                                        {matchedSop.summary}
-                                      </p>
-                                    </div>
-                                    <div className="pt-3 mt-3 border-t border-teal-300/20 flex items-center justify-between text-[11px] font-mono text-cyan-100/75">
-                                      <span>Nhấn vào ảnh để xem kích thước lớn</span>
-                                      <span className="text-emerald-300">LIGHTBOX HD</span>
-                                    </div>
-                                  </div>
-                                </div>
+                                <motion.button
+                                  type="button"
+                                  whileHover={{ y: -1, scale: 1.02 }}
+                                  whileTap={{ scale: 0.97 }}
+                                  onClick={() => onNavigateToSopLibrary(matchedSop.id)}
+                                  className="inline-flex items-center gap-1 text-xs text-emerald-300 hover:text-cyan-200 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                                >
+                                  Xem toàn văn trong Quy Trình Hệ Thống
+                                  <ArrowUpRight className="w-3.5 h-3.5" />
+                                </motion.button>
                               </div>
                             )}
                           </div>
