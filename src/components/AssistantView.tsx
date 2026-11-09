@@ -10,25 +10,19 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import {
-  BioZone,
   ChatMessage,
   SopDocument,
+  SpeciesType,
 } from '../types/biosecurity';
 import { getZoneSemanticStyle } from '../utils/ragMatcher';
 
 interface AssistantViewProps {
+  species: SpeciesType;
   sops: SopDocument[];
   messages: ChatMessage[];
   isLoading: boolean;
   onSendQuestion: (question: string) => void;
   onClearHistory: () => void;
-  onOpenLightbox: (img: {
-    url: string;
-    title: string;
-    zoneLabel?: string;
-    zone?: BioZone;
-    caption?: string;
-  }) => void;
   onNavigateToSopLibrary: (sopId?: string) => void;
 }
 
@@ -51,19 +45,21 @@ const BIO_PARTICLES = [
 ];
 
 export const AssistantView: React.FC<AssistantViewProps> = ({
+  species,
   sops,
   messages,
   isLoading,
   onSendQuestion,
   onClearHistory,
-  onOpenLightbox,
   onNavigateToSopLibrary,
 }) => {
   const [inputQuestion, setInputQuestion] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const activeSopCount = sops.filter((s) => s.active).length;
+  const speciesName = species === 'ga' ? 'GÀ' : 'HEO';
+  const speciesLower = species === 'ga' ? 'gà' : 'heo';
+  const sopCount = sops.length;
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -110,11 +106,18 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
               <Sparkles className="w-5 h-5 text-slate-950" />
             </div>
             <div>
-              <h2 id="ai-chatbox-heading" className="text-base font-bold text-[#F8FAFC]">
-                Tra Cứu Quy Trình
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 id="ai-chatbox-heading" className="text-base font-bold text-[#F8FAFC]">
+                  Tra Cứu Quy Trình ({speciesName})
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 text-[11px] font-mono font-semibold">
+                  {speciesName}
+                </span>
+              </div>
               <div className="flex items-center gap-2 text-xs text-cyan-100/80">
-                <span>Đối chiếu trực tiếp từ {activeSopCount} quy trình chuẩn trong bộ nhớ Admin</span>
+                <span>
+                  Đối chiếu trực tiếp từ {sopCount} quy trình {speciesLower} trong bộ nhớ hệ thống
+                </span>
               </div>
             </div>
           </div>
@@ -166,29 +169,28 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                   transition={{ type: 'spring', stiffness: 320, damping: 28 }}
                   className="py-14 px-4 text-center max-w-2xl mx-auto flex flex-col items-center justify-center space-y-7"
                 >
-                  {/* 4. VISUAL FOCAL POINT: 3D LOGO ENERGY CORE WITH 3 CONCENTRIC BIO-SHIELD RINGS */}
+                  {/* 3D LOGO ENERGY CORE WITH 3 CONCENTRIC BIO-SHIELD RINGS */}
                   <div className="relative flex items-center justify-center w-44 h-44 sm:w-48 sm:h-48 mx-auto">
-                    {/* Ring 3 (Outermost): Slow 4s Radar Wave Ping with opacity-20 teal/emerald */}
+                    {/* Ring 3: Slow 4s Radar Wave Ping */}
                     <div
                       aria-hidden="true"
                       className="animate-radar-ping-4s absolute inset-0 rounded-full bg-teal-400/20 border-2 border-emerald-300/35 pointer-events-none"
                     />
 
-                    {/* Subtle secondary ambient halo behind the rings */}
+                    {/* Secondary ambient halo */}
                     <div
                       aria-hidden="true"
                       className="absolute inset-3 rounded-full bg-gradient-to-tr from-emerald-400/20 via-teal-300/15 to-cyan-400/20 blur-xl pointer-events-none"
                     />
 
-                    {/* Ring 2 (Middle): Dashed Circular Ring rotating slowly clockwise (20s) */}
+                    {/* Ring 2: Dashed Circular Ring rotating slowly clockwise */}
                     <div
                       aria-hidden="true"
                       className="animate-spin-20s absolute inset-2 sm:inset-2.5 rounded-full border-2 border-dashed border-cyan-300/30 pointer-events-none"
                     />
 
-                    {/* Floating Center Logo Container (4s gentle up-and-down float) */}
+                    {/* Floating Center Logo */}
                     <div className="animate-float relative z-10 flex items-center justify-center">
-                      {/* Ring 1 (Hugging the Logo): Glowing Cyan-Emerald border hugging the logo corners */}
                       <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-b from-white via-slate-50 to-cyan-50 border-2 border-cyan-300/80 ring-2 ring-emerald-400/50 shadow-[0_0_40px_rgba(16,185,129,0.45),0_10px_25px_rgba(6,182,212,0.3)]">
                         <img
                           src="/assets/aistudio/23-logo-thai-viet-corporation_c66d41c5.jpeg"
@@ -199,10 +201,15 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Luminous Greeting Text (Strictly NO Quick Suggestion Cards) */}
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-white tracking-wide drop-shadow-[0_2px_10px_rgba(34,211,238,0.3)]">
-                    Tôi có thể giải đáp về quy trình nào cho Bạn ?
-                  </h3>
+                  {/* Luminous Greeting Text */}
+                  <div className="space-y-1.5">
+                    <h3 className="text-lg sm:text-xl md:text-2xl font-semibold text-white tracking-wide drop-shadow-[0_2px_10px_rgba(34,211,238,0.3)]">
+                      Tôi có thể giải đáp về quy trình nào cho Bạn ?
+                    </h3>
+                    <p className="text-xs text-cyan-200/80 font-mono">
+                      Hệ thống An toàn sinh học chuyên biệt trại {speciesName} ({sopCount} quy trình khả dụng)
+                    </p>
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div
@@ -230,7 +237,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                         >
                           <div className="max-w-2xl rounded-2xl bg-gradient-to-r from-emerald-500/35 via-teal-500/30 to-cyan-500/35 backdrop-blur-xl border border-cyan-300/40 px-5 py-3.5 text-[#F8FAFC] shadow-[0_8px_32px_0_rgba(6,182,212,0.25)] ring-1 ring-inset ring-white/15">
                             <div className="flex items-center justify-between gap-4 text-[11px] text-cyan-100 font-mono mb-1">
-                              <span>NHÂN SỰ TRẠI TRA CỨU</span>
+                              <span>NHÂN SỰ TRẠI {speciesName}</span>
                               <span>{msg.timestamp}</span>
                             </div>
                             <p className="text-sm md:text-base font-medium leading-relaxed">
@@ -247,6 +254,53 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                     const zoneStyle = getZoneSemanticStyle(payload.zone);
                     const matchedSop = msg.matchedSop;
 
+                    // Resolve source SOPs directly from database (via source_ids or matchedSop)
+                    const resolvedSourceSops: SopDocument[] =
+                      msg.sourceSops && msg.sourceSops.length > 0
+                        ? msg.sourceSops
+                        : matchedSop
+                        ? [matchedSop]
+                        : [];
+
+                    const primarySop = resolvedSourceSops[0] || matchedSop;
+
+                    // Source attribution
+                    const sourceTitle = payload.sourceSopTitle || primarySop?.title || '';
+                    const sourceZone =
+                      payload.sourceZone ||
+                      (primarySop?.area
+                        ? `${primarySop.area} (${
+                            primarySop.zone_type === 'do'
+                              ? 'Vùng Đỏ - nguy hiểm'
+                              : primarySop.zone_type === 'vang'
+                              ? 'Vùng Vàng - rủi ro'
+                              : 'Vùng Xanh - an toàn'
+                          })`
+                        : '');
+
+                    // Extract disinfect_min and dilution directly from database SOPs
+                    const dbDisinfectMin =
+                      primarySop &&
+                      primarySop.disinfect_min !== null &&
+                      primarySop.disinfect_min !== undefined &&
+                      Number(primarySop.disinfect_min) > 0
+                        ? primarySop.disinfect_min
+                        : null;
+
+                    const dbDilution =
+                      primarySop && primarySop.dilution && primarySop.dilution.trim() !== ''
+                        ? primarySop.dilution.trim()
+                        : null;
+
+                    const hasQuantitativeBlock = dbDisinfectMin !== null || dbDilution !== null;
+
+                    const warningToDisplay =
+                      primarySop !== undefined
+                        ? primarySop.warning && primarySop.warning.trim() !== ''
+                          ? primarySop.warning.trim()
+                          : ''
+                        : '';
+
                     return (
                       <motion.div
                         key={msg.id}
@@ -260,25 +314,22 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                           <div className="px-5 py-3.5 bg-white/[0.04] border-b border-teal-300/20 flex flex-wrap items-center justify-between gap-3">
                             <div className="flex flex-wrap items-center gap-2.5 text-xs">
                               <span className={`px-3 py-1 rounded-lg font-bold ${zoneStyle.badgeClass}`}>
-                                {zoneStyle.glyph} PHÂN VÙNG ÁP DỤNG:{' '}
-                                {(matchedSop?.zoneLabel || payload.zoneLabel).toUpperCase()}
+                                {zoneStyle.glyph} {payload.zoneLabel.toUpperCase()}
                               </span>
-                              {matchedSop && (
-                                <span className="font-mono text-cyan-200/80">
-                                  MÃ SOP: {matchedSop.code}
-                                </span>
-                              )}
+                              <span className="px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-200 border border-cyan-400/30 font-mono">
+                                TRẠI {speciesName}
+                              </span>
                             </div>
 
                             <div className="flex items-center gap-2 text-xs text-cyan-100/80 font-mono">
                               {payload.isOutOfScope ? (
                                 <span className="px-2.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-400/35 text-amber-200 font-medium">
-                                  ▲ NGOÀI DỮ LIỆU CHUẨN ADMIN
+                                  ▲ NGOÀI DANH MỤC {speciesName}
                                 </span>
                               ) : (
                                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/35 text-emerald-200 font-medium flex items-center gap-1 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                                   <CheckCircle2 className="w-3.5 h-3.5" />
-                                  ĐÃ ĐỐI CHIẾU KNOWLEDGE BASE
+                                  ĐÃ ĐỐI CHIẾU DỮ LIỆU {speciesName}
                                 </span>
                               )}
                               <span aria-hidden="true">·</span>
@@ -294,35 +345,48 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                               </h3>
                             </div>
 
-                            {/* Key Quantitative Metrics Strip */}
-                            {payload.keyMetrics && payload.keyMetrics.length > 0 && (
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                {payload.keyMetrics.map((metric, idx) => (
-                                  <motion.div
-                                    key={`${metric.label}-${idx}`}
-                                    whileHover={{ y: -3, scale: 1.01 }}
-                                    className="p-3 rounded-xl bg-white/[0.06] backdrop-blur-md border border-teal-300/20 hover:border-cyan-300/45 ring-1 ring-inset ring-white/5 transition-colors"
-                                  >
-                                    <div className="text-[11px] text-cyan-100/75 truncate">
-                                      {metric.label}
-                                    </div>
-                                    <div className="mt-1 flex items-baseline gap-1.5">
-                                      <span className="text-lg font-bold font-mono text-emerald-300 tabular-nums">
-                                        {metric.value}
+                            {/* Khối Thông số kỹ thuật định lượng chính (nằm ngay trước Tóm tắt ngắn quy trình, lấy trực tiếp từ database) */}
+                            {hasQuantitativeBlock && (
+                              <div className="space-y-2.5">
+                                <div className="text-xs font-mono text-emerald-300 font-semibold tracking-wide">
+                                  Thông số kỹ thuật định lượng chính (Hiển thị bảng số liệu nhanh):
+                                </div>
+                                <div className="space-y-2">
+                                  {dbDisinfectMin !== null && (
+                                    <div className="grid grid-cols-12 items-center gap-3 px-4 py-3 rounded-xl bg-slate-950/75 border border-teal-300/25">
+                                      <span className="col-span-5 text-xs sm:text-sm font-semibold text-cyan-100">
+                                        Thời gian sát trùng
                                       </span>
-                                      <span className="text-xs font-mono text-cyan-100/70">
-                                        {metric.unit}
+                                      <span className="col-span-4 text-sm sm:text-base font-mono font-bold text-emerald-300 text-center">
+                                        ≥ {dbDisinfectMin}
+                                      </span>
+                                      <span className="col-span-3 text-xs sm:text-sm font-mono text-cyan-200/80 text-right">
+                                        phút
                                       </span>
                                     </div>
-                                  </motion.div>
-                                ))}
+                                  )}
+
+                                  {dbDilution !== null && (
+                                    <div className="grid grid-cols-12 items-center gap-3 px-4 py-3 rounded-xl bg-slate-950/75 border border-teal-300/25">
+                                      <span className="col-span-5 text-xs sm:text-sm font-semibold text-cyan-100">
+                                        Nồng độ pha thuốc
+                                      </span>
+                                      <span className="col-span-4 text-sm sm:text-base font-mono font-bold text-emerald-300 text-center">
+                                        {dbDilution}
+                                      </span>
+                                      <span className="col-span-3 text-xs sm:text-sm font-mono text-cyan-200/80 text-right">
+                                        tỷ lệ
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
 
-                            {/* 2. Step-by-Step Standard Procedure (Markdown) */}
+                            {/* 2. Tóm tắt ngắn quy trình (Markdown) */}
                             <div className="space-y-2">
                               <div className="text-xs font-mono text-emerald-300 tracking-wide">
-                                CÁC BƯỚC THỰC HIỆN CHUẨN & THÔNG SỐ KỸ THUẬT:
+                                Tóm tắt ngắn quy trình:
                               </div>
                               <div
                                 className="sop-markdown rounded-xl bg-white/[0.04] backdrop-blur-md border border-teal-300/20 p-4"
@@ -330,41 +394,48 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                               />
                             </div>
 
-                            {/* 3. Critical Biosecurity Warning Box */}
-                            {payload.criticalWarning && (
+                            {/* 3. Lưu ý cảnh báo (chỉ hiển thị khi quy trình có warning) */}
+                            {warningToDisplay !== '' && (
                               <div className="rounded-xl bg-rose-500/15 border border-rose-400/35 p-4 space-y-1.5 shadow-[0_0_20px_rgba(244,63,94,0.15)]">
-                                <div className="flex items-center gap-2 text-xs font-bold text-rose-200">
+                                <div className="flex items-center gap-2 text-xs font-bold text-rose-200 uppercase">
                                   <AlertTriangle className="w-4 h-4 shrink-0" />
-                                  <span>CẢNH BÁO RỦI RO · LƯU Ý SỐNG CÒN VỀ AN TOÀN SINH HỌC</span>
+                                  <span>Lưu ý cảnh báo ({speciesName})</span>
                                 </div>
-                                <p className="text-sm text-rose-100/95 leading-relaxed">
-                                  {payload.criticalWarning}
+                                <p className="text-sm text-rose-100/95 leading-relaxed whitespace-pre-line">
+                                  {warningToDisplay}
                                 </p>
                               </div>
                             )}
 
-                            {/* 4. Text-only Reference Link (No images per user requirement) */}
-                            {matchedSop && (
+                            {/* 4. Text-only Reference Link & Source Attribution */}
+                            {(sourceTitle || primarySop) && (
                               <div className="pt-3 border-t border-teal-300/20 flex flex-wrap items-center justify-between gap-3 text-xs text-cyan-100/80">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="font-semibold text-[#F8FAFC] shrink-0">
-                                    Quy trình đối chiếu:
+                                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                  <span className="font-semibold text-emerald-300 shrink-0">
+                                    Nguồn tài liệu tham chiếu:
                                   </span>
-                                  <span className="font-mono text-emerald-300 shrink-0">
-                                    [{matchedSop.code}]
+                                  <span className="text-[#F8FAFC] font-medium truncate">
+                                    {sourceTitle || primarySop?.title}
                                   </span>
-                                  <span className="text-[#F8FAFC] truncate">{matchedSop.title}</span>
+                                  {sourceZone && (
+                                    <span className="text-cyan-200/75 shrink-0">
+                                      · Khu vực: <strong>{sourceZone}</strong>
+                                    </span>
+                                  )}
                                 </div>
-                                <motion.button
-                                  type="button"
-                                  whileHover={{ y: -1, scale: 1.02 }}
-                                  whileTap={{ scale: 0.97 }}
-                                  onClick={() => onNavigateToSopLibrary(matchedSop.id)}
-                                  className="inline-flex items-center gap-1 text-xs text-emerald-300 hover:text-cyan-200 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                                >
-                                  Xem toàn văn trong Quy Trình Hệ Thống
-                                  <ArrowUpRight className="w-3.5 h-3.5" />
-                                </motion.button>
+
+                                {primarySop && (
+                                  <motion.button
+                                    type="button"
+                                    whileHover={{ y: -1, scale: 1.02 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    onClick={() => onNavigateToSopLibrary(primarySop.id)}
+                                    className="inline-flex items-center gap-1 text-xs text-emerald-300 hover:text-cyan-200 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                                  >
+                                    Xem toàn văn quy trình
+                                    <ArrowUpRight className="w-3.5 h-3.5" />
+                                  </motion.button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -382,7 +453,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
                       <div className="w-full max-w-3xl rounded-2xl bg-slate-900/50 backdrop-blur-2xl border border-emerald-300/35 p-5 space-y-3 shadow-[0_8px_32px_0_rgba(6,182,212,0.2)]">
                         <div className="flex items-center gap-2.5 text-xs font-mono text-emerald-300">
                           <Sparkles className="w-4 h-4 animate-spin" />
-                          <span>ĐANG ĐỐI CHIẾU DỮ LIỆU QUY TRÌNH TRONG HỆ THỐNG...</span>
+                          <span>ĐANG ĐỐI CHIẾU DỮ LIỆU QUY TRÌNH {speciesName} TỪ SUPABASE...</span>
                         </div>
                         <div className="space-y-2">
                           <div className="h-4 bg-white/[0.08] rounded w-3/4 animate-pulse" />
@@ -411,7 +482,7 @@ export const AssistantView: React.FC<AssistantViewProps> = ({
               type="text"
               value={inputQuestion}
               onChange={(e) => setInputQuestion(e.target.value)}
-              placeholder="Nhập nội dung quy trình an toàn sinh học cần tra cứu..."
+              placeholder={`Nhập nội dung quy trình ATSH ${speciesLower} cần tra cứu...`}
               disabled={isLoading}
               className="w-full px-4 py-3 rounded-xl bg-transparent focus:outline-none text-sm text-[#F8FAFC] placeholder-cyan-100/65 disabled:opacity-60"
             />

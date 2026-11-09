@@ -11,20 +11,29 @@ const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
 
-interface SopDocument {
+interface SopInputDocument {
   id: string;
-  code: string;
   title: string;
-  zone: 'RED' | 'YELLOW' | 'GREEN' | 'RED_YELLOW' | 'GENERAL';
-  zoneLabel: string;
-  tags: string[];
-  imageUrl: string;
-  summary: string;
+  species?: 'ga' | 'heo';
+  area?: string;
+  zone_type?: 'xanh' | 'vang' | 'do' | string;
+  disinfect_min?: number | null;
+  dilution?: string | null;
   content: string;
-  criticalWarning: string;
-  keyMetrics: { label: string; value: string; unit: string }[];
-  active: boolean;
-  updatedAt: string;
+  warning?: string | null;
+  active?: boolean;
+}
+
+function getZoneDisplayLabel(zoneType?: string): string {
+  switch (zoneType) {
+    case 'do':
+      return 'Vùng Đỏ (nguy hiểm)';
+    case 'vang':
+      return 'Vùng Vàng (rủi ro)';
+    case 'xanh':
+    default:
+      return 'Vùng Xanh (an toàn)';
+  }
 }
 
 function getGenAIClient() {
@@ -48,9 +57,15 @@ async function startServer() {
 
   app.post('/api/biosecurity/ask', async (req, res) => {
     try {
-      const { question, activeSops = [], customSystemInstruction = '' } = req.body as {
+      const {
+        question,
+        species = 'heo',
+        activeSops = [],
+        customSystemInstruction = '',
+      } = req.body as {
         question: string;
-        activeSops: SopDocument[];
+        species?: 'ga' | 'heo';
+        activeSops: SopInputDocument[];
         customSystemInstruction?: string;
       };
 
@@ -59,68 +74,72 @@ async function startServer() {
         return;
       }
 
+      const speciesText = species === 'ga' ? 'GÀ' : 'HEO';
+      const speciesShort = species === 'ga' ? 'gà' : 'heo';
+
       const ai = getGenAIClient();
 
       const knowledgeBaseText = activeSops
-        .filter((s) => s.active)
-        .map(
-          (sop, idx) =>
-            `--- QUY TRÌNH #${idx + 1} [ID: ${sop.id}] [MÃ: ${sop.code}] ---
-Tiêu đề: ${sop.title}
-Phân vùng ATSH: ${sop.zone} (${sop.zoneLabel})
-Từ khóa nhận diện: ${sop.tags.join(', ')}
-Tóm tắt: ${sop.summary}
-Thông số kỹ thuật chính: ${sop.keyMetrics.map((m) => `${m.label}: ${m.value} ${m.unit}`).join(' | ')}
-Cảnh báo sống còn: ${sop.criticalWarning}
-Nội dung quy trình chi tiết:
-${sop.content}
-`
-        )
+        .map((sop, idx) => {
+          const areaText = sop.area || 'Khu vực chung';
+          const zoneLabel = getZoneDisplayLabel(sop.zone_type);
+          const hasDisinfect =
+            sop.disinfect_min !== null &&
+            sop.disinfect_min !== undefined &&
+            Number(sop.disinfect_min) > 0;
+          const hasDilution = Boolean(sop.dilution && String(sop.dilution).trim() !== '');
+          const hasWarning = Boolean(sop.warning && String(sop.warning).trim() !== '');
+
+          const lines: string[] = [
+            `--- QUY TRÌNH #${idx + 1} [ID: ${sop.id}] ---`,
+            `Tiêu đề: ${sop.title}`,
+            `Khu vực: ${areaText}`,
+            `Vùng: ${zoneLabel}`,
+          ];
+
+          if (hasDisinfect) {
+            lines.push(`Thời gian sát trùng: ≥ ${sop.disinfect_min} phút`);
+          }
+          if (hasDilution) {
+            lines.push(`Nồng độ pha thuốc: ${String(sop.dilution).trim()}`);
+          }
+
+          lines.push(`Nội dung:\n${sop.content}`);
+
+          if (hasWarning) {
+            lines.push(`Lưu ý cảnh báo: ${String(sop.warning).trim()}`);
+          }
+
+          return lines.join('\n');
+        })
         .join('\n\n');
 
-      const systemInstruction = `Bạn là "Trợ lý ATSH" của Hệ Thống An Toàn Sinh Học - CÔNG TY CỔ PHẦN THÁI VIỆT CORPORATION - Chuyên gia Cấp cao về Kiểm soát Dịch tễ và An toàn sinh học (Biosecurity) trang trại heo công nghệ cao.
+      const systemInstruction = `Bạn là "Trợ lý ATSH" của Hệ Thống An Toàn Sinh Học - CÔNG TY CỔ PHẦN THÁI VIỆT CORPORATION - Chuyên gia Cấp cao về Kiểm soát Dịch tễ và An toàn sinh học (Biosecurity) trang trại ${speciesText}.
 Xưng hô: "Trợ lý ATSH" và luôn gọi người dùng là "Anh/Chị" một cách lịch thiệp, tôn trọng và đồng hành.
-Hướng dẫn bổ sung từ Admin: ${customSystemInstruction || 'Diễn đạt mềm mại, thấu cảm, tư duy chuyên ngành cao, trả lời đúng trọng tâm.'}
+${customSystemInstruction ? `Hướng dẫn bổ sung: ${customSystemInstruction}` : ''}
 
-PHONG CÁCH DIỄN ĐẠT & TƯ DUY CHUYÊN NGÀNH (BẮT BUỘC):
-1. DIỄN ĐẠT MỀM MẠI, TỰ NHIÊN, CÓ TÂM CỦA CHUYÊN GIA:
-   - Mở đầu câu trả lời một cách tự nhiên, mềm mại và ân cần (ví dụ: "Dạ chào Anh/Chị...", "Về vấn đề này, Trợ lý xin chia sẻ cùng Anh/Chị...", "Đối với trường hợp này, trong quy chuẩn an toàn sinh học của trại chúng ta...").
-   - Văn phong ấm áp, tôn trọng, gần gũi nhưng cực kỳ chuẩn mực khoa học, như một Bác sĩ Thú y trưởng hoặc Giám đốc Kỹ thuật An toàn sinh học đang tận tình tư vấn trực tiếp cho đồng nghiệp tại hiện trường.
-2. TƯ DUY CAO NHƯ CON NGƯỜI CHUYÊN NGÀNH:
-   - Thể hiện sự hiểu biết sâu sắc về nguyên lý dịch tễ học và cơ chế lây lan của các mầm bệnh nguy hiểm (ASF - Dịch tả heo châu Phi, PRRS - Tai xanh, PED - Tiêu chảy cấp, FMD - Lở mồm long móng).
-   - Không trả lời như một cỗ máy sao chép vô hồn. Hãy phân tích ngắn gọn lý do kỹ thuật hoặc cơ chế vi sinh đằng sau thao tác (tại sao phải đạt nhiệt độ này, tại sao cần thời gian ngâm đó, tại sao phải đổi ủng một chiều...).
-3. NỘI DUNG TRỌNG TÂM - TUYỆT ĐỐI KHÔNG SAO CHÉP HÀNG LOẠT NGUYÊN VĂN DÀI CỦA TOÀN BỘ TÀI LIỆU:
-   - TUYỆT ĐỐI KHÔNG sao chép nguyên văn dài dòng của toàn tài liệu hay bê nguyên cả văn bản SOP nhiều trang vào câu trả lời.
-   - CHỈ TRẢ LỜI ĐÚNG VÀ ĐỦ NỘI DUNG XOAY QUANH CHỦ ĐỀ NGƯỜI DÙNG ĐANG HỎI:
-     * Nếu người dùng hỏi về "thời gian cách ly nhân sự/khách", chỉ tập trung trả lời chính xác số giờ cách ly, quy tắc tắm sát trùng liên quan trực tiếp, không lan man sang xuất nhập heo hay rửa xe tải.
-     * Nếu người dùng hỏi về "nồng độ pha thuốc" hoặc "hóa chất", chỉ tập trung vào tỷ lệ pha, loại thuốc phù hợp và thời gian tiếp xúc của khu vực đó.
-     * Nếu người dùng hỏi về một sự cố hoặc bước thao tác cụ thể, hãy phân tích và đưa ra giải pháp trọng tâm cho đúng bước thao tác đó.
-   - Trình bày khúc chiết, súc tích bằng Markdown: các gạch đầu dòng rõ ràng, BẮT BUỘC in đậm (**...**) tất cả các thông số kỹ thuật cốt lõi (thời gian, nhiệt độ, nồng độ pha, áp lực, khoảng cách).
-4. KHÔNG KÈM HÌNH ẢNH:
-   - Câu trả lời tập trung hoàn toàn vào nội dung tư vấn chuyên môn và giải pháp kỹ thuật, tuyệt đối không chèn link ảnh hay thẻ hình ảnh vào văn bản.
-
-QUY TẮC RAG VÀ CẤU TRÚC PHẢN HỒI:
-1. Bạn CHỈ trả lời dựa trên "DỮ LIỆU QUY TRÌNH CHUẨN DO ADMIN NẠP (KNOWLEDGE BASE)" được cung cấp bên dưới.
-2. Nếu câu hỏi của người dùng khớp với một hoặc nhiều quy trình trong Knowledge Base:
-   - Đặt "isOutOfScope": false.
-   - Đặt "matchedSopId" là ID của quy trình khớp nhất (ví dụ: "sop-01").
-   - Đặt "zone" và "zoneLabel" theo đúng phân vùng của quy trình đó.
-   - Trong "summaryTitle": Đặt tiêu đề ngắn gọn, đúng trọng tâm câu hỏi của người dùng (không đặt tiêu đề chung chung của toàn bộ SOP nếu người dùng chỉ hỏi một khía cạnh hẹp).
-   - Trong "stepsMarkdown": Trình bày nội dung câu trả lời mềm mại, súc tích, tư duy chuyên môn cao và chỉ xoay quanh chủ đề được hỏi.
-   - Trong "criticalWarning": Trích xuất lưu ý an toàn sinh học sống còn liên quan mật thiết nhất đến chủ đề câu hỏi.
-   - Trong "keyMetrics": Chọn lọc 2 đến 4 thông số định lượng trọng tâm nhất liên quan trực tiếp đến câu hỏi của người dùng.
-3. Nếu câu hỏi của người dùng NẰM NGOÀI dữ liệu Knowledge Base hiện có (hoặc quy trình đó đã bị Admin tắt):
+QUY TẮC RAG VÀ TÁCH BIỆT DỮ LIỆU [BẮT BUỘC]:
+1. Chỉ trả lời dựa trên các quy trình [${speciesText}] bên dưới. Nếu không có thông tin, trả lời: "Chưa có quy trình này trong hệ thống ${speciesShort}, vui lòng liên hệ bộ phận Bio." Không bịa đặt, không suy diễn ngoài tài liệu.
+2. Chỉ nhắc các thông số khi quy trình có ghi, không tự suy đoán. Nêu rõ khu vực và vùng áp dụng.
+3. Nếu không có thông tin khớp trong danh sách quy trình ${speciesShort} bên dưới:
    - Đặt "isOutOfScope": true.
-   - Đặt "matchedSopId": "".
-   - Đặt "zone": "GENERAL", "zoneLabel": "Khuyến Nghị Tham Khảo · Ngoài Danh Mục Admin".
-   - Mở đầu bằng lời chia sẻ mềm mại: "Dạ thưa Anh/Chị, nội dung này hiện chưa nằm trong danh mục quy trình chuẩn đã nạp của hệ thống Admin trại. Với góc độ chuyên môn An toàn sinh học, Trợ lý xin chia sẻ khuyến nghị tham khảo như sau:..." sau đó đưa ra các hướng dẫn an toàn, trọng tâm.
+   - Đặt "matchedSopId": "" và "source_ids": [].
+   - Đặt "stepsMarkdown": "Chưa có quy trình này trong hệ thống ${speciesShort}, vui lòng liên hệ bộ phận Bio."
+   - Đặt "criticalWarning": "" (chuỗi rỗng).
+   - Đặt "keyMetrics": [] (mảng rỗng).
+4. Nếu có thông tin khớp trong danh sách quy trình ${speciesShort}:
+   - Đặt "isOutOfScope": false.
+   - Đặt "matchedSopId" là ID của quy trình chính khớp nhất, và đặt "source_ids" là mảng chứa ID của quy trình nguồn được sử dụng.
+   - Ghi rõ tên quy trình ("sourceSopTitle") và khu vực kèm vùng ("sourceZone").
+   - CHỈ TRẢ LỜI ĐÚNG VÀ ĐỦ NỘI DUNG XOAY QUANH CHỦ ĐỀ NGƯỜI DÙNG ĐANG HỎI, diễn đạt mềm mại, tư duy cao như chuyên gia chuyên ngành, nội dung trọng tâm. Không sao chép hàng loạt nguyên văn dài của toàn tài liệu.
+5. KHÔNG KÈM HÌNH ẢNH trong nội dung trả lời.
 
-DỮ LIỆU QUY TRÌNH CHUẨN DO ADMIN NẠP (KNOWLEDGE BASE HIỆN TẠI - ${activeSops.filter((s) => s.active).length} QUY TRÌNH ACTIVE):
-${knowledgeBaseText || '(Hiện chưa có quy trình nào đang Active trong hệ thống Admin)'}`;
+DỮ LIỆU QUY TRÌNH [${speciesText}] HIỆN TẠI (${activeSops.length} QUY TRÌNH):
+${knowledgeBaseText || `(Hiện chưa có quy trình nào cho ${speciesShort} trong hệ thống)`}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
-        contents: `Câu hỏi của nhân sự trại: "${question}"`,
+        contents: `Câu hỏi của nhân sự trang trại ${speciesShort}: "${question}"`,
         config: {
           systemInstruction,
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
@@ -130,7 +149,20 @@ ${knowledgeBaseText || '(Hiện chưa có quy trình nào đang Active trong h�
             properties: {
               matchedSopId: {
                 type: Type.STRING,
-                description: 'ID của quy trình SOP khớp nhất trong Knowledge Base, hoặc chuỗi rỗng nếu nằm ngoài dữ liệu.',
+                description: 'ID của quy trình SOP khớp nhất, hoặc chuỗi rỗng nếu không có.',
+              },
+              source_ids: {
+                type: Type.ARRAY,
+                description: 'Mảng ID của các quy trình SOP nguồn được dùng để trả lời.',
+                items: { type: Type.STRING },
+              },
+              sourceSopTitle: {
+                type: Type.STRING,
+                description: 'Tên quy trình SOP được dùng làm nguồn tham chiếu.',
+              },
+              sourceZone: {
+                type: Type.STRING,
+                description: 'Khu vực và vùng áp dụng.',
               },
               isOutOfScope: {
                 type: Type.BOOLEAN,
@@ -138,11 +170,11 @@ ${knowledgeBaseText || '(Hiện chưa có quy trình nào đang Active trong h�
               },
               zone: {
                 type: Type.STRING,
-                description: 'Mã phân vùng: RED, YELLOW, GREEN, RED_YELLOW, hoặc GENERAL.',
+                description: 'Mã phân vùng: RED (Vùng Đỏ), YELLOW (Vùng Vàng), GREEN (Vùng Xanh), hoặc GENERAL.',
               },
               zoneLabel: {
                 type: Type.STRING,
-                description: 'Tên hiển thị phân vùng áp dụng.',
+                description: 'Khu vực và tên vùng hiển thị.',
               },
               summaryTitle: {
                 type: Type.STRING,
@@ -150,15 +182,15 @@ ${knowledgeBaseText || '(Hiện chưa có quy trình nào đang Active trong h�
               },
               stepsMarkdown: {
                 type: Type.STRING,
-                description: 'Nội dung các bước thực hiện chuẩn định dạng Markdown, in đậm các thông số kỹ thuật quan trọng.',
+                description: 'Nội dung trả lời trọng tâm, mềm mại, chuẩn mực định dạng Markdown.',
               },
               criticalWarning: {
                 type: Type.STRING,
-                description: 'Cảnh báo rủi ro (Lưu ý sống còn) cần đặc biệt tuân thủ.',
+                description: 'Lưu ý cảnh báo nếu quy trình có ghi, hoặc chuỗi rỗng nếu quy trình không có.',
               },
               keyMetrics: {
                 type: Type.ARRAY,
-                description: '3-4 thông số kỹ thuật định lượng quan trọng nhất.',
+                description: 'Mảng rỗng hoặc thông số định lượng.',
                 items: {
                   type: Type.OBJECT,
                   properties: {
@@ -172,6 +204,9 @@ ${knowledgeBaseText || '(Hiện chưa có quy trình nào đang Active trong h�
             },
             required: [
               'matchedSopId',
+              'source_ids',
+              'sourceSopTitle',
+              'sourceZone',
               'isOutOfScope',
               'zone',
               'zoneLabel',

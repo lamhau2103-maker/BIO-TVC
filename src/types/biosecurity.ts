@@ -1,3 +1,5 @@
+export type SpeciesType = 'ga' | 'heo';
+export type ZoneType = 'xanh' | 'vang' | 'do';
 export type BioZone = 'RED' | 'YELLOW' | 'GREEN' | 'RED_YELLOW' | 'GENERAL';
 
 export interface SopKeyMetric {
@@ -8,34 +10,30 @@ export interface SopKeyMetric {
 
 export interface SopDocument {
   id: string;
-  code: string;
+  species: SpeciesType;
   title: string;
-  zone: BioZone;
-  zoneLabel: string;
-  tags: string[];
-  imageUrl: string;
-  summary: string;
+  area: string;
+  zone_type: ZoneType;
+  disinfect_min: number | null;
+  dilution: string | null;
   content: string;
-  criticalWarning: string;
-  keyMetrics: SopKeyMetric[];
-  active: boolean;
-  updatedAt: string;
-}
-
-export interface DefenseLineCard {
-  id: 'LINE_1' | 'LINE_2' | 'LINE_3';
-  zone: 'RED' | 'YELLOW' | 'GREEN';
-  lineNumber: string;
-  title: string;
-  subtitle: string;
-  description: string;
-  imageUrl: string;
-  keyControlPoints: string[];
-  quickPrompts: string[];
+  warning: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  // Optional compatibility fields
+  zone?: BioZone;
+  zoneLabel?: string;
+  active?: boolean;
+  updatedAt?: string;
 }
 
 export interface ChatResponsePayload {
   matchedSopId: string;
+  source_ids?: string[];
+  sourceSopTitle?: string;
+  sourceZone?: string;
   isOutOfScope: boolean;
   zone: BioZone;
   zoneLabel: string;
@@ -52,16 +50,9 @@ export interface ChatMessage {
   question?: string;
   payload?: ChatResponsePayload;
   matchedSop?: SopDocument;
+  sourceSops?: SopDocument[];
   isError?: boolean;
   errorText?: string;
-}
-
-export interface PresetBioImage {
-  id: string;
-  title: string;
-  zone: BioZone;
-  url: string;
-  caption: string;
 }
 
 export interface ToastNotice {

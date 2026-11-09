@@ -5,46 +5,41 @@ import {
   Search,
   MessageSquarePlus,
   BookOpen,
-  ZoomIn,
-  AlertTriangle,
   X,
   CheckCircle2,
+  Layers,
+  Sparkles,
+  AlertTriangle,
+  MapPin,
 } from 'lucide-react';
-import { BioZone, SopDocument } from '../types/biosecurity';
-import { getZoneSemanticStyle } from '../utils/ragMatcher';
-import { ResilientImage } from './ResilientImage';
+import { SopDocument, SpeciesType, ZoneType } from '../types/biosecurity';
+import { getZoneTypeBadge } from '../lib/supabase';
 
 interface SopLibraryViewProps {
+  species: SpeciesType;
   sops: SopDocument[];
-  areaCatalog: string[];
   highlightedSopId?: string | null;
   onAskAiAboutSop: (sop: SopDocument) => void;
-  onOpenLightbox: (img: {
-    url: string;
-    title: string;
-    zoneLabel?: string;
-    zone?: BioZone;
-    caption?: string;
-  }) => void;
+  onNavigateToUpload?: () => void;
+  canUpload?: boolean;
 }
 
-const DEFAULT_BASE_AREAS = [
-  'Vùng Đỏ · Ngoại Vi & Trạm Rửa Xe',
-  'Vùng Vàng · Nhà Tắm Sát Trùng & Cách Ly',
-  'Vùng Vàng · Phòng Khử Khuẩn Vật Tư',
-  'Vùng Đỏ - Vàng · Cầu Trung Chuyển Xuất Nhập Heo',
-  'Vùng Xanh · Khu Sản Xuất & Chuồng Nuôi',
+const ZONE_ORDER: { type: ZoneType; title: string; subtitle: string }[] = [
+  { type: 'do', title: 'Vùng Đỏ (nguy hiểm)', subtitle: 'Khu vực ngoại vi & kiểm soát rủi ro dịch tễ cao' },
+  { type: 'vang', title: 'Vùng Vàng (rủi ro)', subtitle: 'Vùng đệm sát trùng & trung chuyển cách ly' },
+  { type: 'xanh', title: 'Vùng Xanh (an toàn)', subtitle: 'Khu vực sản xuất & chuồng nuôi an toàn tuyệt đối' },
 ];
 
 export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
+  species,
   sops,
-  areaCatalog,
   highlightedSopId,
   onAskAiAboutSop,
-  onOpenLightbox,
+  onNavigateToUpload,
+  canUpload = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [zoneFilter, setZoneFilter] = useState<string>('ALL');
+  const [zoneFilter, setZoneFilter] = useState<'ALL' | ZoneType>('ALL');
   const [selectedSopDetail, setSelectedSopDetail] = useState<SopDocument | null>(() => {
     if (highlightedSopId) {
       return sops.find((s) => s.id === highlightedSopId) || null;
@@ -52,93 +47,63 @@ export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
     return null;
   });
 
-  const activeSops = useMemo(() => sops.filter((s) => s.active), [sops]);
+  const speciesName = species === 'ga' ? 'GÀ' : 'HEO';
+  const speciesLower = species === 'ga' ? 'gà' : 'heo';
 
-  // Extract custom Khu Vực added in the Tài Liệu (Admin) tab or attached to SOPs
-  const customAddedAreas = useMemo(() => {
-    const set = new Set<string>();
-    for (const area of areaCatalog) {
-      const trimmed = area.trim();
-      if (trimmed && !DEFAULT_BASE_AREAS.includes(trimmed)) {
-        set.add(trimmed);
-      }
-    }
-    for (const sop of activeSops) {
-      const parts = (sop.zoneLabel || '')
-        .split(' | ')
-        .map((p) => p.trim())
-        .filter(Boolean);
-      for (const p of parts) {
-        if (!DEFAULT_BASE_AREAS.includes(p)) {
-          set.add(p);
-        }
-      }
-    }
-    return Array.from(set);
-  }, [areaCatalog, activeSops]);
+  const filterTabs: { id: 'ALL' | ZoneType; label: string }[] = [
+    { id: 'ALL', label: 'Tất cả phân vùng' },
+    { id: 'do', label: '● Vùng Đỏ (nguy hiểm)' },
+    { id: 'vang', label: '▲ Vùng Vàng (rủi ro)' },
+    { id: 'xanh', label: '■ Vùng Xanh (an toàn)' },
+  ];
 
   const filteredSops = useMemo(() => {
-    return activeSops.filter((sop) => {
-      let matchesZone = false;
-      if (zoneFilter === 'ALL') {
-        matchesZone = true;
-      } else if (
-        zoneFilter === 'RED' ||
-        zoneFilter === 'YELLOW' ||
-        zoneFilter === 'RED_YELLOW' ||
-        zoneFilter === 'GREEN' ||
-        zoneFilter === 'GENERAL'
-      ) {
-        matchesZone =
-          sop.zone === zoneFilter ||
-          (zoneFilter === 'RED' && sop.zone === 'RED_YELLOW') ||
-          (zoneFilter === 'YELLOW' && sop.zone === 'RED_YELLOW');
-      } else if (zoneFilter.startsWith('AREA:')) {
-        const targetArea = zoneFilter.slice(5).toLowerCase();
-        const sopAreas = (sop.zoneLabel || '')
-          .split(' | ')
-          .map((s) => s.trim().toLowerCase());
-        matchesZone =
-          sopAreas.includes(targetArea) ||
-          (sop.zoneLabel || '').toLowerCase().includes(targetArea);
+    return sops.filter((sop) => {
+      if (zoneFilter !== 'ALL' && sop.zone_type !== zoneFilter) {
+        return false;
       }
-
-      if (!matchesZone) return false;
 
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       return (
         sop.title.toLowerCase().includes(q) ||
-        sop.code.toLowerCase().includes(q) ||
-        sop.summary.toLowerCase().includes(q) ||
+        (sop.area && sop.area.toLowerCase().includes(q)) ||
         sop.content.toLowerCase().includes(q) ||
-        (sop.zoneLabel || '').toLowerCase().includes(q) ||
-        sop.tags.some((t) => t.toLowerCase().includes(q))
+        (sop.warning && sop.warning.toLowerCase().includes(q))
       );
     });
-  }, [activeSops, zoneFilter, searchQuery]);
+  }, [sops, zoneFilter, searchQuery]);
+
+  // Group by Zone (do -> vang -> xanh), then by Area
+  const groupedByZoneAndArea = useMemo(() => {
+    return ZONE_ORDER.map((zoneMeta) => {
+      const sopsInZone = filteredSops.filter((s) => s.zone_type === zoneMeta.type);
+      const areaMap = new Map<string, SopDocument[]>();
+
+      for (const sop of sopsInZone) {
+        const areaName = (sop.area || 'Khu vực chung').trim();
+        const existing = areaMap.get(areaName) || [];
+        existing.push(sop);
+        areaMap.set(areaName, existing);
+      }
+
+      const areaGroups = Array.from(areaMap.entries()).map(([areaName, items]) => ({
+        areaName,
+        items,
+      }));
+
+      return {
+        ...zoneMeta,
+        totalCount: sopsInZone.length,
+        areaGroups,
+      };
+    }).filter((group) => group.totalCount > 0);
+  }, [filteredSops]);
 
   const renderMarkdownHtml = (mdText: string) => {
     const rawHtml = marked.parse(mdText, { async: false }) as string;
     return { __html: rawHtml };
   };
-
-  const baseFilterTabs = [
-    { id: 'ALL', label: 'Tất cả phân vùng' },
-    { id: 'RED', label: '● Vùng Đỏ (Rủi ro cao)' },
-    { id: 'YELLOW', label: '▲ Vùng Vàng (Rủi ro)' },
-    { id: 'RED_YELLOW', label: '◆ Đỏ - Vàng (Trung chuyển)' },
-    { id: 'GREEN', label: '■ Vùng Xanh (An toàn)' },
-    { id: 'GENERAL', label: '◈ Quy định chung' },
-  ];
-
-  const allFilterTabs = [
-    ...baseFilterTabs,
-    ...customAddedAreas.map((customArea) => ({
-      id: `AREA:${customArea}`,
-      label: `◈ ${customArea}`,
-    })),
-  ];
 
   return (
     <div className="space-y-6">
@@ -156,16 +121,16 @@ export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs text-cyan-100/80 mb-1">
-              <span className="font-mono text-emerald-300">
-                QUY TRÌNH HỆ THỐNG (VISUAL SOP CARDS)
+              <span className="font-mono text-emerald-300 font-bold">
+                QUY TRÌNH HỆ THỐNG TRẠI {speciesName}
               </span>
               <span aria-hidden="true">·</span>
               <span>
-                Hiển thị {filteredSops.length} / {activeSops.length} quy trình đang kích hoạt
+                Hiển thị {filteredSops.length} / {sops.length} quy trình {speciesLower}
               </span>
             </div>
             <h1 className="text-2xl font-bold text-[#F8FAFC] tracking-tight">
-              Danh Mục Quy Trình Chuẩn An Toàn Sinh Học (SOP)
+              Danh Mục Quy Trình Chuẩn An Toàn Sinh Học ({speciesName})
             </h1>
           </div>
 
@@ -176,16 +141,16 @@ export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm theo tên, mã SOP, khu vực, từ khóa..."
+              placeholder={`Tìm quy trình ${speciesLower}, khu vực...`}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/10 backdrop-blur-md border border-cyan-300/30 focus:border-emerald-300 focus:shadow-[0_0_20px_rgba(52,211,153,0.3)] focus:outline-none text-sm text-[#F8FAFC] placeholder-cyan-100/65 transition-all"
             />
           </div>
         </div>
 
-        {/* Zone & Custom Added Khu Vực Sliding Pill Filter Bar */}
+        {/* Zone Filter Sliding Pill Filter Bar */}
         <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-teal-300/20">
-          <span className="text-xs text-cyan-100/80 mr-1">Phân vùng ATSH:</span>
-          {allFilterTabs.map((tab) => {
+          <span className="text-xs text-cyan-100/80 mr-1">Phân vùng {speciesName}:</span>
+          {filterTabs.map((tab) => {
             const isActive = zoneFilter === tab.id;
             return (
               <motion.button
@@ -214,15 +179,47 @@ export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
         </div>
       </motion.div>
 
-      {/* Staggered SOP Grid Cards with Shared Element Morphing */}
-      {filteredSops.length === 0 ? (
+      {/* Grouped SOPs by Zone -> Area */}
+      {sops.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/20 p-12 text-center space-y-4 shadow-[0_8px_32px_0_rgba(6,182,212,0.15)]"
+        >
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center text-cyan-300 shadow-[0_0_25px_rgba(6,182,212,0.25)]">
+            <Layers className="w-7 h-7" />
+          </div>
+          <div className="space-y-1.5 max-w-md mx-auto">
+            <h3 className="text-lg font-bold text-white">
+              Chưa có quy trình an toàn sinh học nào cho {speciesName}
+            </h3>
+            <p className="text-xs text-cyan-100/75 leading-relaxed">
+              Hệ thống hiện tại chưa có dữ liệu quy trình chuẩn cho đàn {speciesLower}.
+              {canUpload
+                ? ' Anh/Chị có thể nạp quy trình mới ngay tại tab Tài Liệu.'
+                : ' Vui lòng liên hệ Phó admin hoặc Admin để nạp quy trình vào hệ thống.'}
+            </p>
+          </div>
+          {canUpload && onNavigateToUpload && (
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={onNavigateToUpload}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-400/30 cursor-pointer"
+            >
+              Nạp Quy Trình {speciesName} Ngay
+            </motion.button>
+          )}
+        </motion.div>
+      ) : filteredSops.length === 0 ? (
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 p-12 text-center space-y-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)]"
         >
           <p className="text-base font-semibold text-[#F8FAFC]">
-            Không tìm thấy quy trình SOP nào khớp với bộ lọc hiện tại
+            Không tìm thấy quy trình nào khớp với bộ lọc hiện tại
           </p>
           <p className="text-xs text-[#94A3B8]">
             Thử xóa từ khóa tìm kiếm hoặc chuyển bộ lọc sang &ldquo;Tất cả phân vùng&rdquo;.
@@ -241,144 +238,129 @@ export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
           </motion.button>
         </motion.div>
       ) : (
-        <motion.div
-          key={`${zoneFilter}-${searchQuery}`}
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: { opacity: 0 },
-            visible: {
-              opacity: 1,
-              transition: {
-                staggerChildren: 0.05,
-              },
-            },
-          }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch"
-        >
-          {filteredSops.map((sop) => {
-            const zoneStyle = getZoneSemanticStyle(sop.zone);
+        <div className="space-y-8">
+          {groupedByZoneAndArea.map((zoneGroup) => {
+            const zoneBadge = getZoneTypeBadge(zoneGroup.type);
             return (
-              <motion.article
-                key={sop.id}
-                layoutId={`card-container-${sop.id}`}
-                variants={{
-                  hidden: { opacity: 0, y: 18, scale: 0.97 },
-                  visible: {
-                    opacity: 1,
-                    y: 0,
-                    scale: 1,
-                    transition: { type: 'spring', stiffness: 340, damping: 28 },
-                  },
-                }}
-                whileHover={{ y: -4, scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                className="flex flex-col justify-between rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 transition-colors duration-200 overflow-hidden"
+              <section
+                key={zoneGroup.type}
+                className="rounded-2xl bg-slate-900/35 backdrop-blur-2xl border border-teal-300/20 p-5 sm:p-6 space-y-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]"
               >
-                <div>
-                  {/* Top Visual Image */}
-                  <motion.div
-                    layoutId={`card-image-${sop.id}`}
-                    className="h-48 w-full relative overflow-hidden bg-slate-950/80"
-                  >
-                    <ResilientImage
-                      src={sop.imageUrl}
-                      alt={sop.title}
-                      zone={sop.zone}
-                      containerClassName="w-full h-full relative"
-                      className="w-full h-full object-cover"
-                      showExpandHint={true}
-                      onExpandClick={() =>
-                        onOpenLightbox({
-                          url: sop.imageUrl,
-                          title: sop.title,
-                          zoneLabel: sop.zoneLabel,
-                          zone: sop.zone,
-                          caption: sop.summary,
-                        })
-                      }
-                    />
-                  </motion.div>
-
-                  {/* Card Content */}
-                  <div className="p-5 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span
-                        className={`px-2.5 py-1 rounded-lg font-semibold ${zoneStyle.badgeClass}`}
-                      >
-                        {zoneStyle.glyph} {sop.zoneLabel || zoneStyle.shortTag}
-                      </span>
-                      <span className="font-mono text-[#94A3B8]">{sop.code}</span>
-                    </div>
-
-                    <motion.h2
-                      layoutId={`card-title-${sop.id}`}
-                      className="text-base font-bold text-[#F8FAFC] leading-snug line-clamp-2"
-                    >
-                      {sop.title}
-                    </motion.h2>
-
-                    <p className="text-xs text-[#94A3B8] leading-relaxed line-clamp-3">
-                      {sop.summary}
-                    </p>
-
-                    {/* Key Metrics Mini Row */}
-                    {sop.keyMetrics && sop.keyMetrics.length > 0 && (
-                      <div className="pt-3 border-t border-white/10 grid grid-cols-2 gap-2">
-                        {sop.keyMetrics.slice(0, 2).map((m, i) => (
-                          <div
-                            key={`${m.label}-${i}`}
-                            className="p-2 rounded-lg bg-white/[0.03] border border-white/5 text-xs"
-                          >
-                            <div className="text-[11px] text-[#94A3B8] truncate">{m.label}</div>
-                            <div className="font-mono font-semibold text-emerald-300 tabular-nums mt-0.5">
-                              {m.value}{' '}
-                              <span className="text-[#94A3B8] font-normal">{m.unit}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Clean tags line */}
-                    <div className="pt-1 text-[11px] text-[#94A3B8] truncate">
-                      <span className="text-slate-500">Từ khóa: </span>
-                      {sop.tags.join(' · ')}
-                    </div>
+                {/* Zone Group Header */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-teal-300/20 pb-3.5">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border ${zoneBadge.colorClass}`}>
+                      {zoneBadge.glyph} {zoneGroup.title}
+                    </span>
+                    <span className="text-xs text-cyan-100/75 hidden sm:inline">
+                      {zoneGroup.subtitle}
+                    </span>
                   </div>
+                  <span className="text-xs font-mono text-cyan-200/80">
+                    {zoneGroup.totalCount} quy trình
+                  </span>
                 </div>
 
-                {/* Card Actions */}
-                <div className="px-5 py-3.5 bg-white/[0.03] border-t border-white/10 flex items-center justify-between gap-2">
-                  <motion.button
-                    type="button"
-                    whileHover={{ y: -2, scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setSelectedSopDetail(sop)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-medium text-[#F8FAFC] border border-white/10 hover:border-emerald-400/40 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
-                    Xem chi tiết
-                  </motion.button>
+                {/* Area Sub-groups within this Zone */}
+                <div className="space-y-6">
+                  {zoneGroup.areaGroups.map((areaGroup) => (
+                    <div key={areaGroup.areaName} className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-bold text-cyan-100">
+                        <MapPin className="w-4 h-4 text-emerald-300 shrink-0" />
+                        <span>Khu vực: {areaGroup.areaName}</span>
+                        <span className="text-xs font-normal text-cyan-200/70">
+                          ({areaGroup.items.length} quy trình)
+                        </span>
+                      </div>
 
-                  <motion.button
-                    type="button"
-                    whileHover={{ y: -2, scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => onAskAiAboutSop(sop)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-500 hover:from-emerald-300 hover:to-cyan-300 text-xs font-bold text-slate-950 shadow-[0_0_18px_rgba(16,185,129,0.28)] transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <MessageSquarePlus className="w-3.5 h-3.5" />
-                    Hỏi AI về quy trình này
-                  </motion.button>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
+                        {areaGroup.items.map((sop) => {
+                          const badge = getZoneTypeBadge(sop.zone_type);
+                          const hasDisinfect =
+                            sop.disinfect_min !== null &&
+                            sop.disinfect_min !== undefined &&
+                            Number(sop.disinfect_min) > 0;
+                          const hasDilution = Boolean(sop.dilution && sop.dilution.trim() !== '');
+
+                          return (
+                            <motion.article
+                              key={sop.id}
+                              whileHover={{ y: -4, scale: 1.01 }}
+                              className="flex flex-col justify-between rounded-2xl bg-slate-900/50 backdrop-blur-2xl border border-teal-300/20 hover:border-cyan-300/40 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] ring-1 ring-inset ring-white/5 transition-colors duration-200 overflow-hidden"
+                            >
+                              <div className="p-5 space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <span className={`px-2.5 py-1 rounded-lg font-semibold border ${badge.colorClass}`}>
+                                    {badge.glyph} {badge.fullLabel}
+                                  </span>
+                                  <span className="font-mono text-cyan-200 text-[11px] px-2.5 py-0.5 rounded-md bg-white/[0.06] border border-cyan-300/25">
+                                    {sop.area}
+                                  </span>
+                                </div>
+
+                                <h3 className="text-base font-bold text-[#F8FAFC] leading-snug line-clamp-2">
+                                  {sop.title}
+                                </h3>
+
+                                {(hasDisinfect || hasDilution) && (
+                                  <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+                                    {hasDisinfect && (
+                                      <span className="px-2.5 py-1 rounded-lg bg-slate-950/60 border border-emerald-400/30 text-emerald-300">
+                                        Sát trùng: ≥ {sop.disinfect_min} phút
+                                      </span>
+                                    )}
+                                    {hasDilution && (
+                                      <span className="px-2.5 py-1 rounded-lg bg-slate-950/60 border border-cyan-400/30 text-cyan-200">
+                                        Nồng độ: {sop.dilution}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
+                                <p className="text-xs text-cyan-100/75 leading-relaxed line-clamp-3">
+                                  {sop.content.replace(/[#*`-]/g, '').slice(0, 140)}
+                                  {sop.content.length > 140 ? '...' : ''}
+                                </p>
+                              </div>
+
+                              {/* Card Actions */}
+                              <div className="px-5 py-3.5 bg-white/[0.03] border-t border-teal-300/20 flex items-center justify-between gap-2">
+                                <motion.button
+                                  type="button"
+                                  whileHover={{ y: -2, scale: 1.02 }}
+                                  whileTap={{ scale: 0.97 }}
+                                  onClick={() => setSelectedSopDetail(sop)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-medium text-[#F8FAFC] border border-cyan-300/25 hover:border-emerald-400/40 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                                >
+                                  <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                                  Xem chi tiết
+                                </motion.button>
+
+                                <motion.button
+                                  type="button"
+                                  whileHover={{ y: -2, scale: 1.02 }}
+                                  whileTap={{ scale: 0.97 }}
+                                  onClick={() => onAskAiAboutSop(sop)}
+                                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-xs font-bold text-slate-950 shadow-md shadow-cyan-400/25 transition-all cursor-pointer whitespace-nowrap shrink-0"
+                                >
+                                  <MessageSquarePlus className="w-3.5 h-3.5" />
+                                  Hỏi AI về quy trình
+                                </motion.button>
+                              </div>
+                            </motion.article>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </motion.article>
+              </section>
             );
           })}
-        </motion.div>
+        </div>
       )}
 
-      {/* SHARED ELEMENT MORPHING SOP DETAIL MODAL (PowerPoint Morph Transition) */}
+      {/* Detail Modal */}
       <AnimatePresence>
         {selectedSopDetail && (
           <motion.div
@@ -393,31 +375,24 @@ export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
             aria-modal="true"
           >
             <motion.div
-              layoutId={`card-container-${selectedSopDetail.id}`}
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
               transition={{ type: 'spring', stiffness: 340, damping: 30 }}
-              className="w-full max-w-4xl max-h-[88vh] bg-slate-900/85 backdrop-blur-2xl border border-emerald-400/35 rounded-2xl overflow-hidden flex flex-col shadow-[0_20px_60px_rgba(0,0,0,0.75)] ring-1 ring-inset ring-white/10"
+              className="w-full max-w-3xl max-h-[88vh] bg-slate-900/95 backdrop-blur-2xl border border-teal-300/35 rounded-2xl overflow-hidden flex flex-col shadow-[0_20px_60px_rgba(0,0,0,0.75)] ring-1 ring-inset ring-white/10"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="px-6 py-4 bg-white/[0.04] border-b border-white/10 flex items-center justify-between gap-4">
+              <div className="px-6 py-4 bg-white/[0.04] border-b border-teal-300/20 flex items-center justify-between gap-4">
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span
-                      className={`px-2.5 py-0.5 rounded-lg font-bold ${
-                        getZoneSemanticStyle(selectedSopDetail.zone).badgeClass
-                      }`}
-                    >
-                      {getZoneSemanticStyle(selectedSopDetail.zone).glyph}{' '}
-                      {selectedSopDetail.zoneLabel}
+                    <span className="px-2.5 py-0.5 rounded-lg font-bold bg-cyan-500/20 border border-cyan-400/30 text-cyan-200">
+                      QUY TRÌNH TRẠI {speciesName}
                     </span>
-                    <span className="font-mono text-emerald-400">{selectedSopDetail.code}</span>
                   </div>
-                  <motion.h2
-                    layoutId={`card-title-${selectedSopDetail.id}`}
-                    className="text-base md:text-lg font-bold text-[#F8FAFC] truncate"
-                  >
+                  <h2 className="text-base md:text-lg font-bold text-[#F8FAFC]">
                     {selectedSopDetail.title}
-                  </motion.h2>
+                  </h2>
                 </div>
                 <motion.button
                   type="button"
@@ -431,106 +406,103 @@ export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
               </div>
 
               {/* Modal Scrollable Body */}
-              <div className="p-6 overflow-y-auto space-y-6">
-                {/* Image + Metrics Split */}
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
-                  <motion.div
-                    layoutId={`card-image-${selectedSopDetail.id}`}
-                    className="md:col-span-6 h-56 rounded-xl overflow-hidden border border-white/10 bg-slate-950"
-                  >
-                    <ResilientImage
-                      src={selectedSopDetail.imageUrl}
-                      alt={selectedSopDetail.title}
-                      zone={selectedSopDetail.zone}
-                      containerClassName="w-full h-full relative"
-                      className="w-full h-full object-cover"
-                      showExpandHint={true}
-                      onExpandClick={() =>
-                        onOpenLightbox({
-                          url: selectedSopDetail.imageUrl,
-                          title: selectedSopDetail.title,
-                          zoneLabel: selectedSopDetail.zoneLabel,
-                          zone: selectedSopDetail.zone,
-                          caption: selectedSopDetail.summary,
-                        })
-                      }
-                    />
-                  </motion.div>
-                  <div className="md:col-span-6 flex flex-col justify-between space-y-3">
+              <div className="p-6 overflow-y-auto space-y-5">
+                {/* 1. Khu vực và Vùng */}
+                <div className="flex flex-wrap items-center gap-3 p-3.5 rounded-xl bg-white/[0.04] border border-teal-300/20">
+                  <div className="flex items-center gap-2 text-xs text-cyan-100">
+                    <MapPin className="w-4 h-4 text-emerald-300" />
+                    <span className="text-cyan-200/80">Khu vực:</span>
+                    <span className="font-bold text-white">{selectedSopDetail.area}</span>
+                  </div>
+                  <span aria-hidden="true" className="text-cyan-500/40">|</span>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-cyan-200/80">Phân vùng:</span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-lg font-semibold border ${
+                        getZoneTypeBadge(selectedSopDetail.zone_type).colorClass
+                      }`}
+                    >
+                      {getZoneTypeBadge(selectedSopDetail.zone_type).glyph}{' '}
+                      {getZoneTypeBadge(selectedSopDetail.zone_type).fullLabel}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Thông số kỹ thuật định lượng chính (chỉ hiển thị khi có ít nhất 1 thông số) */}
+                {((selectedSopDetail.disinfect_min !== null &&
+                  selectedSopDetail.disinfect_min !== undefined &&
+                  Number(selectedSopDetail.disinfect_min) > 0) ||
+                  Boolean(selectedSopDetail.dilution && selectedSopDetail.dilution.trim() !== '')) && (
+                  <div className="space-y-2.5">
+                    <div className="text-xs font-mono text-emerald-300 font-semibold tracking-wide">
+                      Thông số kỹ thuật định lượng chính (Hiển thị bảng số liệu nhanh):
+                    </div>
                     <div className="space-y-2">
-                      <div className="text-xs font-mono text-emerald-400">
-                        TÓM TẮT QUY TRÌNH CHUẨN:
-                      </div>
-                      <p className="text-xs md:text-sm text-[#94A3B8] leading-relaxed">
-                        {selectedSopDetail.summary}
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      {selectedSopDetail.keyMetrics.map((m, idx) => (
-                        <div
-                          key={`${m.label}-${idx}`}
-                          className="p-3 rounded-xl bg-white/[0.04] border border-white/10 ring-1 ring-inset ring-white/5"
-                        >
-                          <div className="text-[11px] text-[#94A3B8]">{m.label}</div>
-                          <div className="text-base font-bold font-mono text-emerald-300 tabular-nums mt-0.5">
-                            {m.value}{' '}
-                            <span className="text-xs text-[#94A3B8] font-normal">{m.unit}</span>
+                      {selectedSopDetail.disinfect_min !== null &&
+                        selectedSopDetail.disinfect_min !== undefined &&
+                        Number(selectedSopDetail.disinfect_min) > 0 && (
+                          <div className="grid grid-cols-12 items-center gap-3 px-4 py-3 rounded-xl bg-slate-950/70 border border-teal-300/25">
+                            <span className="col-span-5 text-xs sm:text-sm font-semibold text-cyan-100">
+                              Thời gian sát trùng
+                            </span>
+                            <span className="col-span-4 text-sm sm:text-base font-mono font-bold text-emerald-300 text-center">
+                              ≥ {selectedSopDetail.disinfect_min}
+                            </span>
+                            <span className="col-span-3 text-xs sm:text-sm font-mono text-cyan-200/80 text-right">
+                              phút
+                            </span>
                           </div>
+                        )}
+
+                      {Boolean(selectedSopDetail.dilution && selectedSopDetail.dilution.trim() !== '') && (
+                        <div className="grid grid-cols-12 items-center gap-3 px-4 py-3 rounded-xl bg-slate-950/70 border border-teal-300/25">
+                          <span className="col-span-5 text-xs sm:text-sm font-semibold text-cyan-100">
+                            Nồng độ pha thuốc
+                          </span>
+                          <span className="col-span-4 text-sm sm:text-base font-mono font-bold text-emerald-300 text-center">
+                            {selectedSopDetail.dilution}
+                          </span>
+                          <span className="col-span-3 text-xs sm:text-sm font-mono text-cyan-200/80 text-right">
+                            tỷ lệ
+                          </span>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Critical Warning */}
-                <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 p-4 space-y-1 shadow-[0_0_20px_rgba(244,63,94,0.12)]">
-                  <div className="flex items-center gap-2 text-xs font-bold text-rose-300">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>CẢNH BÁO RỦI RO SỐNG CÒN</span>
-                  </div>
-                  <p className="text-sm text-rose-100 leading-relaxed">
-                    {selectedSopDetail.criticalWarning}
-                  </p>
-                </div>
-
-                {/* Full SOP Markdown Content */}
+                {/* 3. Nội dung quy trình (Markdown) */}
                 <div className="space-y-2">
-                  <div className="text-xs font-mono text-emerald-400">
-                    NỘI DUNG CHI TIẾT QUY TRÌNH ĐÃ NẠP CHO AI:
+                  <div className="text-xs font-mono text-emerald-300 font-semibold tracking-wide">
+                    Tóm tắt ngắn quy trình:
                   </div>
                   <div
-                    className="sop-markdown rounded-xl bg-white/[0.03] border border-white/10 p-5"
+                    className="sop-markdown rounded-xl bg-white/[0.03] border border-teal-300/20 p-5 text-sm leading-relaxed"
                     dangerouslySetInnerHTML={renderMarkdownHtml(selectedSopDetail.content)}
                   />
                 </div>
+
+                {/* 4. Lưu ý cảnh báo (chỉ hiển thị khi có warning) */}
+                {selectedSopDetail.warning && selectedSopDetail.warning.trim() !== '' && (
+                  <div className="rounded-xl bg-rose-500/15 border border-rose-400/40 p-4 space-y-1.5 shadow-[0_0_20px_rgba(244,63,94,0.15)]">
+                    <div className="flex items-center gap-2 text-xs font-bold text-rose-200 uppercase tracking-wide">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-300" />
+                      <span>Lưu ý cảnh báo</span>
+                    </div>
+                    <p className="text-sm text-rose-100/95 leading-relaxed whitespace-pre-line">
+                      {selectedSopDetail.warning}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Modal Footer */}
-              <div className="px-6 py-4 bg-white/[0.03] border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs text-[#94A3B8]">
+              <div className="px-6 py-4 bg-white/[0.03] border-t border-teal-300/20 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-cyan-100/75">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Từ khóa nhận diện: {selectedSopDetail.tags.join(' · ')}</span>
+                  <span>Dữ liệu lưu trữ bảo mật trên Supabase</span>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <motion.button
-                    type="button"
-                    whileHover={{ y: -2, scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() =>
-                      onOpenLightbox({
-                        url: selectedSopDetail.imageUrl,
-                        title: selectedSopDetail.title,
-                        zoneLabel: selectedSopDetail.zoneLabel,
-                        zone: selectedSopDetail.zone,
-                        caption: selectedSopDetail.summary,
-                      })
-                    }
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-medium text-[#F8FAFC] border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <ZoomIn className="w-3.5 h-3.5 text-emerald-400" />
-                    Phóng to ảnh SOP
-                  </motion.button>
                   <motion.button
                     type="button"
                     whileHover={{ y: -2, scale: 1.02 }}
@@ -540,10 +512,10 @@ export const SopLibraryView: React.FC<SopLibraryViewProps> = ({
                       setSelectedSopDetail(null);
                       onAskAiAboutSop(target);
                     }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 via-cyan-400 to-blue-500 hover:from-emerald-300 hover:to-cyan-300 text-xs font-bold text-slate-950 shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 text-xs font-bold text-slate-950 shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer whitespace-nowrap shrink-0"
                   >
-                    <MessageSquarePlus className="w-3.5 h-3.5" />
-                    Hỏi Trợ Lý AI về quy trình này
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Tra cứu AI về quy trình này
                   </motion.button>
                 </div>
               </div>

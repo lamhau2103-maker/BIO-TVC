@@ -1,1175 +1,946 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
-  Lock,
-  Unlock,
   PlusCircle,
   Save,
   Trash2,
   Edit3,
   Upload,
   Download,
-  Image as ImageIcon,
-  CheckCircle2,
   RotateCcw,
-  KeyRound,
-  Cpu,
   FileUp,
-  Eye,
-  X,
+  AlertTriangle,
+  Sparkles,
+  Loader2,
+  FileText,
+  Sliders,
+  MapPin,
+  ShieldAlert,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { SopDocument, SpeciesType, ZoneType } from '../types/biosecurity';
 import {
-  BioZone,
-  SopDocument,
-  SopKeyMetric,
-} from '../types/biosecurity';
+  invokeRpc,
+  getZoneTypeBadge,
+} from '../lib/supabase';
 import {
-  IMG_TRUCK_WASH,
-  PRESET_BIO_IMAGES,
-  DEFAULT_SYSTEM_PROMPT,
-} from '../data/seedSops';
-import {
-  getZoneDisplayLabel,
-  getZoneSemanticStyle,
+  BulkImportItem,
+  isValidPositiveNumberMax2Decimals,
   parseBulkImportFile,
+  SAMPLE_TXT_TEMPLATE,
 } from '../utils/ragMatcher';
-import { ResilientImage } from './ResilientImage';
 
 interface AdminPortalProps {
-  sops: SopDocument[];
-  areaCatalog: string[];
-  onUpdateAreaCatalog: (nextCatalog: string[]) => void;
-  isUnlocked: boolean;
-  adminId: string;
-  adminPassword: string;
+  token: string;
+  gaSops: SopDocument[];
+  heoSops: SopDocument[];
   systemPrompt: string;
-  onUnlock: () => void;
-  onLock: () => void;
-  onBackToMain: () => void;
-  onChangeCredentials: (newId: string, newPass: string) => void;
-  onSaveSop: (sop: SopDocument, isEdit: boolean) => void;
-  onDeleteSop: (id: string) => void;
-  onToggleActiveSop: (id: string) => void;
-  onBulkAddSops: (importedSops: SopDocument[], replaceAll?: boolean) => void;
-  onResetSeedData: () => void;
-  onSaveSystemPrompt: (prompt: string) => void;
+  onSaveSystemPrompt: (newPrompt: string) => void;
+  onRefreshData: () => Promise<void>;
   onNotify: (type: 'success' | 'warning' | 'error' | 'info', title: string, message: string) => void;
-  onOpenLightbox: (img: {
-    url: string;
-    title: string;
-    zoneLabel?: string;
-    zone?: BioZone;
-    caption?: string;
-  }) => void;
+  onSessionInvalid: () => void;
 }
 
+const ZONE_OPTIONS: {
+  value: ZoneType;
+  label: string;
+  activeClass: string;
+  inactiveClass: string;
+  dotColor: string;
+}[] = [
+  {
+    value: 'xanh',
+    label: 'Vùng Xanh (an toàn)',
+    activeClass:
+      'bg-emerald-500/25 border-emerald-400 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.3)] ring-1 ring-emerald-400/50',
+    inactiveClass:
+      'bg-white/[0.04] border-white/15 text-cyan-100/75 hover:border-emerald-400/40 hover:text-emerald-200',
+    dotColor: 'bg-emerald-400',
+  },
+  {
+    value: 'vang',
+    label: 'Vùng Vàng (rủi ro)',
+    activeClass:
+      'bg-amber-500/25 border-amber-400 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/50',
+    inactiveClass:
+      'bg-white/[0.04] border-white/15 text-cyan-100/75 hover:border-amber-400/40 hover:text-amber-200',
+    dotColor: 'bg-amber-400',
+  },
+  {
+    value: 'do',
+    label: 'Vùng Đỏ (nguy hiểm)',
+    activeClass:
+      'bg-rose-500/25 border-rose-400 text-rose-200 shadow-[0_0_20px_rgba(244,63,94,0.3)] ring-1 ring-rose-400/50',
+    inactiveClass:
+      'bg-white/[0.04] border-white/15 text-cyan-100/75 hover:border-rose-400/40 hover:text-rose-200',
+    dotColor: 'bg-rose-400',
+  },
+];
+
 export const AdminPortal: React.FC<AdminPortalProps> = ({
-  sops,
-  areaCatalog,
-  onUpdateAreaCatalog,
-  isUnlocked,
-  adminId,
-  adminPassword,
+  token,
+  gaSops,
+  heoSops,
   systemPrompt,
-  onUnlock,
-  onLock,
-  onBackToMain,
-  onChangeCredentials,
-  onSaveSop,
-  onDeleteSop,
-  onToggleActiveSop,
-  onBulkAddSops,
-  onResetSeedData,
   onSaveSystemPrompt,
+  onRefreshData,
   onNotify,
-  onOpenLightbox,
+  onSessionInvalid,
 }) => {
-  // Login overlay state (ID: Admin, Password: adminbio)
-  const [idInput, setIdInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [newIdInput, setNewIdInput] = useState(adminId);
-  const [newPasswordInput, setNewPasswordInput] = useState('');
-  const [showCredentialsChange, setShowCredentialsChange] = useState(false);
-
-  // SOP Form State
+  // Section 1 Form state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [code, setCode] = useState('SOP-RED-006');
+  const [editingSpecies, setEditingSpecies] = useState<SpeciesType | null>(null);
   const [title, setTitle] = useState('');
-  const [zone, setZone] = useState<BioZone>('RED');
-  const [selectedAreas, setSelectedAreas] = useState<string[]>([
-    'Trạm Rửa Xe & Ngoại Vi — Vùng Đỏ ( rủi ro cao )',
-  ]);
-  const [newAreaInput, setNewAreaInput] = useState<string>('');
-  const [newAreaZoneType, setNewAreaZoneType] = useState<
-    'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )'
-  >('Vùng Đỏ ( rủi ro cao )');
-  const [tagsInput, setTagsInput] = useState('');
-  const [imageUrl, setImageUrl] = useState(IMG_TRUCK_WASH);
-  const [summary, setSummary] = useState('');
-  const [criticalWarning, setCriticalWarning] = useState('');
+  const [area, setArea] = useState('');
+  const [zoneType, setZoneType] = useState<ZoneType | ''>('');
+  const [disinfectMinInput, setDisinfectMinInput] = useState('');
+  const [dilutionPartA, setDilutionPartA] = useState('1');
+  const [dilutionPartB, setDilutionPartB] = useState('');
   const [content, setContent] = useState('');
-  const [metrics, setMetrics] = useState<SopKeyMetric[]>([
-    { label: 'Thời gian sát trùng', value: '≥ 30', unit: 'phút' },
-    { label: 'Nồng độ pha thuốc', value: '1:100', unit: 'tỷ lệ' },
-  ]);
-  const [showPresetGallery, setShowPresetGallery] = useState(false);
+  const [warning, setWarning] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Confirm delete state
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Field validation errors
+  const [fieldErrors, setFieldErrors] = useState<{
+    title?: string;
+    area?: string;
+    zoneType?: string;
+    disinfectMin?: string;
+    dilution?: string;
+    content?: string;
+  }>({});
 
-  // AI System Prompt state
-  const [draftSystemPrompt, setDraftSystemPrompt] = useState(systemPrompt);
+  // Section 3: AI System Prompt state
+  const [promptDraft, setPromptDraft] = useState(systemPrompt);
 
-  // File refs
-  const imageFileInputRef = useRef<HTMLInputElement>(null);
+  // Section 4: Table filter & delete modal
+  const [tableSpeciesFilter, setTableSpeciesFilter] = useState<'ALL' | 'ga' | 'heo'>('ALL');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<{ id: string; title: string } | null>(null);
+
+  // Bulk file upload & restore refs
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const restoreJsonInputRef = useRef<HTMLInputElement>(null);
+  const [bulkSpeciesTarget, setBulkSpeciesTarget] = useState<SpeciesType>('heo');
+  const [restoreSpeciesTarget, setRestoreSpeciesTarget] = useState<SpeciesType>('heo');
+  const [pendingRestorePayload, setPendingRestorePayload] = useState<{
+    species: SpeciesType;
+    fileName: string;
+    items: BulkImportItem[];
+    totalRawCount: number;
+  } | null>(null);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (idInput.trim() === adminId && passwordInput === adminPassword) {
-      setLoginError('');
-      setIdInput('');
-      setPasswordInput('');
-      onUnlock();
-      onNotify(
-        'success',
-        'Đăng nhập Quản trị thành công',
-        'Anh/Chị đã mở khóa Cổng Admin Quản lý Tri thức An toàn sinh học.'
-      );
-    } else {
-      setLoginError('Bạn nhập sai tài khoản hoặc mật khẩu.');
-    }
-  };
-
-  const parseAreaItem = (
-    formatted: string
-  ): {
-    name: string;
-    zoneType: 'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )';
-  } => {
-    const parts = formatted.split(' — ');
-    if (parts.length >= 2) {
-      const last = parts[parts.length - 1].trim();
-      const name = parts.slice(0, -1).join(' — ').trim();
-      if (
-        last === 'Vùng Xanh' ||
-        last === 'Vùng Vàng ( rủi ro )' ||
-        last === 'Vùng Đỏ ( rủi ro cao )'
-      ) {
-        return { name, zoneType: last };
-      }
-    }
-    const lower = formatted.toLowerCase();
-    if (lower.includes('vùng xanh') || lower.includes('chuồng')) {
-      return { name: formatted, zoneType: 'Vùng Xanh' };
-    }
-    if (
-      lower.includes('vùng vàng') ||
-      (lower.includes('rủi ro') && !lower.includes('rủi ro cao'))
-    ) {
-      return { name: formatted, zoneType: 'Vùng Vàng ( rủi ro )' };
-    }
-    return { name: formatted, zoneType: 'Vùng Đỏ ( rủi ro cao )' };
-  };
-
-  const formatAreaWithZone = (
-    name: string,
-    zoneType: 'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )'
-  ): string => {
-    const cleanName = name
-      .replace(/\s*—\s*(Vùng Xanh|Vùng Vàng \( rủi ro \)|Vùng Đỏ \( rủi ro cao \))$/i, '')
-      .trim();
-    return `${cleanName} — ${zoneType}`;
-  };
-
-  const inferZoneFromAreaText = (areaText: string): BioZone => {
-    const lower = areaText.toLowerCase();
-    const hasRed = lower.includes('vùng đỏ') || lower.includes('rủi ro cao');
-    const hasYellow = lower.includes('vùng vàng');
-    const hasGreen = lower.includes('vùng xanh');
-    if (hasRed && hasYellow) return 'RED_YELLOW';
-    if (hasRed) return 'RED';
-    if (hasYellow) return 'YELLOW';
-    if (hasGreen) return 'GREEN';
-    return 'GENERAL';
-  };
-
-  const handleAddArea = () => {
-    const trimmed = newAreaInput.trim();
-    const areaName = trimmed || `Khu Vực ${selectedAreas.length + 1}`;
-    const formatted = formatAreaWithZone(areaName, newAreaZoneType);
-
-    setSelectedAreas((prev) => {
-      const next = prev.includes(formatted) ? prev : [...prev, formatted];
-      setZone(inferZoneFromAreaText(next.join(' | ')));
-      return next;
+  // Unique areas for datalist suggestions per species
+  const gaAreas = useMemo(() => {
+    const set = new Set<string>();
+    gaSops.forEach((s) => {
+      if (s.area && s.area.trim()) set.add(s.area.trim());
     });
-    if (!areaCatalog.includes(formatted)) {
-      onUpdateAreaCatalog([...areaCatalog, formatted]);
-      onNotify(
-        'success',
-        'Đã thêm Khu Vực mới',
-        `Đã thêm "${formatted}" và đồng bộ sang bộ lọc Quy Trình Hệ Thống.`
-      );
-    }
-    setNewAreaInput('');
-  };
+    return Array.from(set);
+  }, [gaSops]);
 
-  const handleUpdateSelectedAreaName = (index: number, newName: string) => {
-    setSelectedAreas((prev) => {
-      const next = prev.map((item, idx) => {
-        if (idx !== index) return item;
-        const parsed = parseAreaItem(item);
-        return formatAreaWithZone(newName, parsed.zoneType);
-      });
-      setZone(inferZoneFromAreaText(next.join(' | ')));
-      return next;
+  const heoAreas = useMemo(() => {
+    const set = new Set<string>();
+    heoSops.forEach((s) => {
+      if (s.area && s.area.trim()) set.add(s.area.trim());
     });
-  };
+    return Array.from(set);
+  }, [heoSops]);
 
-  const handleUpdateSelectedAreaZoneType = (
-    index: number,
-    nextZoneType: 'Vùng Xanh' | 'Vùng Vàng ( rủi ro )' | 'Vùng Đỏ ( rủi ro cao )'
-  ) => {
-    setSelectedAreas((prev) => {
-      const oldItem = prev[index];
-      const parsed = parseAreaItem(oldItem);
-      const updatedItem = formatAreaWithZone(parsed.name, nextZoneType);
-      const next = prev.map((item, idx) => (idx === index ? updatedItem : item));
-      setZone(inferZoneFromAreaText(next.join(' | ')));
-
-      // Also update in catalog if present
-      if (areaCatalog.includes(oldItem)) {
-        onUpdateAreaCatalog(areaCatalog.map((c) => (c === oldItem ? updatedItem : c)));
-      } else if (!areaCatalog.includes(updatedItem)) {
-        onUpdateAreaCatalog([...areaCatalog, updatedItem]);
-      }
-      return next;
-    });
-  };
-
-  const handleRemoveSelectedArea = (areaToRemove: string) => {
-    setSelectedAreas((prev) => {
-      const next = prev.filter((item) => item !== areaToRemove);
-      if (next.length > 0) {
-        setZone(inferZoneFromAreaText(next.join(' | ')));
-      }
-      return next;
-    });
-  };
-
-  const handleToggleCatalogArea = (areaName: string) => {
-    setSelectedAreas((prev) => {
-      const exists = prev.includes(areaName);
-      const next = exists ? prev.filter((item) => item !== areaName) : [...prev, areaName];
-      if (next.length > 0) {
-        setZone(inferZoneFromAreaText(next.join(' | ')));
-      }
-      return next;
-    });
-  };
-
-  const handleDeleteFromCatalog = (areaName: string) => {
-    onUpdateAreaCatalog(areaCatalog.filter((item) => item !== areaName));
-    setSelectedAreas((prev) => prev.filter((item) => item !== areaName));
-  };
+  const areaSuggestions = useMemo(() => {
+    if (editingSpecies === 'ga') return gaAreas;
+    if (editingSpecies === 'heo') return heoAreas;
+    return Array.from(new Set([...gaAreas, ...heoAreas]));
+  }, [editingSpecies, gaAreas, heoAreas]);
 
   const resetForm = () => {
     setEditingId(null);
-    setCode(`SOP-BIO-${String(sops.length + 1).padStart(3, '0')}`);
+    setEditingSpecies(null);
     setTitle('');
-    setZone('RED');
-    setSelectedAreas(['Trạm Rửa Xe & Ngoại Vi — Vùng Đỏ ( rủi ro cao )']);
-    setNewAreaInput('');
-    setNewAreaZoneType('Vùng Đỏ ( rủi ro cao )');
-    setTagsInput('');
-    setImageUrl(IMG_TRUCK_WASH);
-    setSummary('');
-    setCriticalWarning('');
+    setArea('');
+    setZoneType('');
+    setDisinfectMinInput('');
+    setDilutionPartA('1');
+    setDilutionPartB('');
     setContent('');
-    setMetrics([
-      { label: 'Thời gian sát trùng', value: '≥ 30', unit: 'phút' },
-      { label: 'Nồng độ pha thuốc', value: '1:100', unit: 'tỷ lệ' },
-    ]);
+    setWarning('');
+    setFieldErrors({});
   };
 
   const handleEditClick = (sop: SopDocument) => {
     setEditingId(sop.id);
-    setCode(sop.code);
-    setTitle(sop.title);
-    setZone(sop.zone);
-    const areas = (sop.zoneLabel || getZoneDisplayLabel(sop.zone))
-      .split(' | ')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    setSelectedAreas(areas.length > 0 ? areas : [getZoneDisplayLabel(sop.zone)]);
-    setNewAreaInput('');
-    setTagsInput(sop.tags.join(', '));
-    setImageUrl(sop.imageUrl);
-    setSummary(sop.summary);
-    setCriticalWarning(sop.criticalWarning);
-    setContent(sop.content);
-    setMetrics(
-      sop.keyMetrics.length > 0
-        ? sop.keyMetrics
-        : [{ label: 'Thời gian tiếp xúc', value: '≥ 30', unit: 'phút' }]
+    setEditingSpecies(sop.species);
+    setTitle(sop.title || '');
+    setArea(sop.area || '');
+    setZoneType(sop.zone_type || '');
+    setDisinfectMinInput(
+      sop.disinfect_min !== null && sop.disinfect_min !== undefined
+        ? String(sop.disinfect_min)
+        : ''
     );
+    if (sop.dilution && sop.dilution.includes(':')) {
+      const [a, b] = sop.dilution.split(':');
+      setDilutionPartA(a ? a.trim() : '1');
+      setDilutionPartB(b ? b.trim() : '');
+    } else {
+      setDilutionPartA('1');
+      setDilutionPartB('');
+    }
+    setContent(sop.content || '');
+    setWarning(sop.warning || '');
+    setFieldErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      onNotify('warning', 'Ảnh quá lớn', 'Vui lòng chọn file ảnh dưới 4MB để tối ưu bộ nhớ.');
-      return;
+  // Validate form and return parsed values
+  const validateForm = (): {
+    valid: boolean;
+    disinfectMin: number | null;
+    dilution: string | null;
+  } => {
+    const errors: {
+      title?: string;
+      area?: string;
+      zoneType?: string;
+      disinfectMin?: string;
+      dilution?: string;
+      content?: string;
+    } = {};
+
+    if (!title.trim()) {
+      errors.title = 'Vui lòng nhập tiêu đề quy trình / chủ đề ATSH.';
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setImageUrl(reader.result);
-        onNotify('success', 'Đã tải ảnh minh họa', `Đã chuyển đổi "${file.name}" sang Base64.`);
+    if (!area.trim()) {
+      errors.area = 'Vui lòng nhập khu vực áp dụng.';
+    }
+    if (!zoneType) {
+      errors.zoneType = 'Vui lòng chọn vùng áp dụng (Vùng Xanh, Vùng Vàng hoặc Vùng Đỏ).';
+    }
+    if (!content.trim()) {
+      errors.content = 'Vui lòng nhập nội dung quy trình.';
+    }
+
+    let parsedDisinfectMin: number | null = null;
+    const dMinTrim = disinfectMinInput.trim();
+    if (dMinTrim !== '') {
+      const check = isValidPositiveNumberMax2Decimals(dMinTrim);
+      if (!check.valid) {
+        errors.disinfectMin = 'Thời gian sát trùng phải là số lớn hơn 0 (tối đa 2 chữ số thập phân).';
+      } else {
+        parsedDisinfectMin = check.value;
       }
-    };
-    reader.readAsDataURL(file);
+    }
+
+    let parsedDilution: string | null = null;
+    const partBTrim = dilutionPartB.trim();
+    const partATrim = dilutionPartA.trim();
+    if (partBTrim !== '') {
+      const checkA = isValidPositiveNumberMax2Decimals(partATrim);
+      const checkB = isValidPositiveNumberMax2Decimals(partBTrim);
+      if (!checkA.valid || !checkB.valid) {
+        errors.dilution = 'Nồng độ pha thuốc phải có dạng A:B (các số lớn hơn 0, tối đa 2 chữ số thập phân).';
+      } else {
+        parsedDilution = `${checkA.value}:${checkB.value}`;
+      }
+    }
+
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      const firstErr =
+        errors.title ||
+        errors.area ||
+        errors.zoneType ||
+        errors.disinfectMin ||
+        errors.dilution ||
+        errors.content;
+      if (firstErr) {
+        onNotify('error', 'Thông tin chưa hợp lệ', firstErr);
+      }
+      return { valid: false, disinfectMin: null, dilution: null };
+    }
+
+    return { valid: true, disinfectMin: parsedDisinfectMin, dilution: parsedDilution };
   };
 
-  const handleSaveForm = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim() || !content.trim()) {
-      onNotify(
-        'error',
-        'Thiếu thông tin bắt buộc',
-        'Vui lòng nhập đầy đủ Tên quy trình và Nội dung chi tiết quy trình.'
-      );
+  // Save SOP for GA or HEO
+  const handleSaveSop = async (targetSpecies: SpeciesType) => {
+    const { valid, disinfectMin, dilution } = validateForm();
+    if (!valid || !zoneType) return;
+
+    const speciesLabel = targetSpecies === 'ga' ? 'Gà' : 'Heo';
+    setIsSubmitting(true);
+
+    const { error } = await invokeRpc(
+      'save_sop',
+      {
+        p_token: token,
+        p_id: editingId || null,
+        p_species: targetSpecies,
+        p_title: title.trim(),
+        p_area: area.trim(),
+        p_zone_type: zoneType,
+        p_disinfect_min: disinfectMin,
+        p_dilution: dilution,
+        p_content: content.trim(),
+        p_warning: warning.trim() ? warning.trim() : null,
+      },
+      onSessionInvalid
+    );
+
+    setIsSubmitting(false);
+
+    if (error) {
+      onNotify('error', `Lỗi lưu quy trình ${speciesLabel}`, error);
       return;
     }
 
-    const parsedTags = tagsInput
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
+    onNotify(
+      'success',
+      editingId ? `Đã cập nhật quy trình ${speciesLabel}` : `Đã nạp quy trình ${speciesLabel}`,
+      `Quy trình "${title.trim()}" đã được lưu thành công vào hệ thống ${speciesLabel}.`
+    );
 
-    const finalAreas = [...selectedAreas];
-    if (newAreaInput.trim()) {
-      const formattedPending = formatAreaWithZone(newAreaInput.trim(), newAreaZoneType);
-      if (!finalAreas.includes(formattedPending)) {
-        finalAreas.push(formattedPending);
-      }
-    }
-    const updatedCatalog = [...areaCatalog];
-    let catalogChanged = false;
-    for (const a of finalAreas) {
-      if (a && !updatedCatalog.includes(a)) {
-        updatedCatalog.push(a);
-        catalogChanged = true;
-      }
-    }
-    if (catalogChanged) {
-      onUpdateAreaCatalog(updatedCatalog);
-    }
-
-    const finalZoneLabel =
-      finalAreas.length > 0 ? finalAreas.join(' | ') : getZoneDisplayLabel(zone);
-    const finalZone = inferZoneFromAreaText(finalZoneLabel);
-
-    const newSop: SopDocument = {
-      id: editingId || `sop-${Date.now()}`,
-      code: code.trim() || `SOP-${Date.now().toString().slice(-4)}`,
-      title: title.trim(),
-      zone: finalZone,
-      zoneLabel: finalZoneLabel,
-      tags: parsedTags.length > 0 ? parsedTags : ['atsh', 'quy trình trại heo'],
-      imageUrl: imageUrl.trim() || IMG_TRUCK_WASH,
-      summary:
-        summary.trim() ||
-        content
-          .replace(/[#*`-]/g, '')
-          .trim()
-          .slice(0, 165) + '...',
-      criticalWarning:
-        criticalWarning.trim() ||
-        'Tuân thủ nghiêm ngặt quy trình phân vùng 1 chiều và định lượng thuốc sát trùng.',
-      content: content.trim(),
-      keyMetrics: metrics.filter((m) => m.label.trim() && m.value.trim()),
-      active: true,
-      updatedAt: new Date().toISOString(),
-    };
-
-    onSaveSop(newSop, Boolean(editingId));
     resetForm();
+    await onRefreshData();
   };
 
-  const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>, replaceAll = false) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Delete SOP
+  const handleDeleteSop = async (id: string) => {
+    setIsSubmitting(true);
+    const { error } = await invokeRpc(
+      'delete_sop',
+      {
+        p_token: token,
+        p_id: id,
+      },
+      onSessionInvalid
+    );
+    setIsSubmitting(false);
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const text = String(reader.result || '');
-        const imported = parseBulkImportFile(file.name, text);
-        if (imported.length === 0) {
-          onNotify(
-            'error',
-            'Không tìm thấy quy trình hợp lệ',
-            'File tải lên không chứa cấu trúc quy trình hợp lệ.'
-          );
-          return;
-        }
-        onBulkAddSops(imported, replaceAll);
-      } catch (err) {
-        onNotify(
-          'error',
-          'Lỗi đọc file',
-          err instanceof Error ? err.message : 'Định dạng file không hợp lệ.'
-        );
-      } finally {
-        e.target.value = '';
-      }
-    };
-    reader.readAsText(file);
+    if (error) {
+      onNotify('error', 'Lỗi xóa quy trình', error);
+      return;
+    }
+
+    onNotify('info', 'Đã xóa quy trình', 'Quy trình đã được gỡ khỏi hệ thống.');
+    setConfirmDeleteId(null);
+    if (editingId === id) resetForm();
+    await onRefreshData();
   };
 
-  const handleExportJson = () => {
-    const dataStr = JSON.stringify(sops, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
+  // Download Sample .TXT File
+  const handleDownloadSampleTxt = () => {
+    const blob = new Blob([SAMPLE_TXT_TEMPLATE], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `he-thong-atsh-knowledge-base-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = 'file-mau-nap-quy-trinh-atsh.txt';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    onNotify(
-      'success',
-      'Đã sao lưu Knowledge Base (.JSON)',
-      `Đã tải xuống ${sops.length} quy trình chuẩn từ bộ nhớ hệ thống.`
+  };
+
+  // Execute bulk_add_sops RPC
+  const executeBulkAddRpc = async (
+    targetSpecies: SpeciesType,
+    items: BulkImportItem[],
+    totalRawCount: number,
+    replace: boolean
+  ) => {
+    const speciesText = targetSpecies === 'ga' ? 'Gà' : 'Heo';
+    setIsSubmitting(true);
+
+    const { data, error } = await invokeRpc<number>(
+      'bulk_add_sops',
+      {
+        p_token: token,
+        p_species: targetSpecies,
+        p_items: items,
+        p_replace: replace,
+      },
+      onSessionInvalid
     );
+
+    setIsSubmitting(false);
+
+    if (error) {
+      onNotify('error', `Lỗi nạp dữ liệu ${speciesText}`, error);
+      return;
+    }
+
+    const insertedCount = typeof data === 'number' ? data : 0;
+    const skippedCount = Math.max(0, totalRawCount - insertedCount);
+
+    if (skippedCount > 0) {
+      onNotify(
+        'warning',
+        `Kết quả nạp quy trình ${speciesText}`,
+        `Đã nạp ${insertedCount}/${totalRawCount} quy trình, ${skippedCount} bị bỏ qua do thiếu hoặc sai dữ liệu`
+      );
+    } else {
+      onNotify(
+        'success',
+        replace ? `Đã khôi phục dữ liệu ${speciesText}` : `Nạp hàng loạt thành công (${speciesText})`,
+        `Đã nạp ${insertedCount}/${totalRawCount} quy trình cho phân hệ ${speciesText}.`
+      );
+    }
+
+    await onRefreshData();
   };
 
-  const handleMetricChange = (index: number, field: keyof SopKeyMetric, val: string) => {
-    setMetrics((prev) => prev.map((m, i) => (i === index ? { ...m, [field]: val } : m)));
+  // Handle Bulk Upload (.TXT / .CSV / .JSON)
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>, isRestore = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const text = String(reader.result || '');
+        const { items, totalRawCount } = parseBulkImportFile(file.name, text);
+
+        if (totalRawCount === 0 || items.length === 0) {
+          onNotify(
+            'error',
+            'Không tìm thấy dữ liệu',
+            isRestore
+              ? 'File không có quy trình hợp lệ, dữ liệu hiện tại được giữ nguyên'
+              : 'File không chứa quy trình hợp lệ.'
+          );
+          return;
+        }
+
+        if (isRestore) {
+          setPendingRestorePayload({
+            species: restoreSpeciesTarget,
+            fileName: file.name,
+            items,
+            totalRawCount,
+          });
+        } else {
+          await executeBulkAddRpc(bulkSpeciesTarget, items, totalRawCount, false);
+        }
+      } catch (err) {
+        onNotify('error', 'Lỗi đọc file', err instanceof Error ? err.message : 'File không hợp lệ');
+      } finally {
+        e.target.value = '';
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-      },
-    },
+  // Export JSON backup with all new fields
+  const handleExportJson = (speciesOption: 'ga' | 'heo' | 'all') => {
+    let sourceList: SopDocument[] = [];
+    if (speciesOption === 'ga') {
+      sourceList = gaSops;
+    } else if (speciesOption === 'heo') {
+      sourceList = heoSops;
+    } else {
+      sourceList = [...gaSops, ...heoSops];
+    }
+
+    const exportData = sourceList.map((s) => ({
+      id: s.id,
+      species: s.species,
+      title: s.title,
+      area: s.area,
+      zone_type: s.zone_type,
+      disinfect_min: s.disinfect_min ?? null,
+      dilution: s.dilution ?? null,
+      content: s.content,
+      warning: s.warning ?? null,
+      created_by: s.created_by ?? null,
+      updated_by: s.updated_by ?? null,
+      created_at: s.created_at ?? null,
+      updated_at: s.updated_at ?? null,
+    }));
+
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `he-thong-atsh-backup-${speciesOption}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    onNotify('success', 'Đã tải xuống bản sao lưu', `Đã export ${exportData.length} quy trình (.JSON).`);
   };
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 16, scale: 0.98 },
-    show: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: {
-        type: 'spring' as const,
-        stiffness: 350,
-        damping: 28,
-      },
-    },
-  };
+  // Combined SOPs list for table
+  const allSops = [
+    ...gaSops.map((s) => ({ ...s, species: 'ga' as SpeciesType })),
+    ...heoSops.map((s) => ({ ...s, species: 'heo' as SpeciesType })),
+  ];
+
+  const displayedSops = allSops.filter((s) => {
+    if (tableSpeciesFilter === 'ALL') return true;
+    return s.species === tableSpeciesFilter;
+  });
 
   return (
-    <div className="relative min-h-[680px]">
-      {/* SECURITY BLUR OVERLAY WHEN LOCKED */}
-      <AnimatePresence>
-        {!isUnlocked && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-30 bg-[#060B14]/80 backdrop-blur-2xl flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94, y: 20, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, scale: 0.95, y: -15, filter: 'blur(6px)' }}
-              transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-              className="w-full max-w-md rounded-2xl bg-slate-900/60 backdrop-blur-2xl border border-white/15 hover:border-emerald-400/40 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.65)] ring-1 ring-inset ring-white/10 space-y-5 transition-colors duration-300"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                  <Lock className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-xs font-mono text-emerald-400 tracking-wide">
-                    ĐĂNG NHẬP QUẢN TRỊ VIÊN
-                  </div>
-                  <h2 className="text-lg font-bold text-[#F8FAFC]">
-                    Cổng Quản Trị & Nạp Dữ Liệu
-                  </h2>
-                </div>
-              </div>
+    <div className="space-y-8">
+      {/* Top Banner */}
+      <div className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/25 p-5 shadow-[0_8px_32px_0_rgba(6,182,212,0.18)] flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs text-cyan-100/80 mb-1">
+            <span className="font-mono text-emerald-300 font-bold">● CỔNG NẠP TÀI LIỆU QUY TRÌNH (SUPABASE)</span>
+            <span aria-hidden="true">·</span>
+            <span>
+              Tổng số: {gaSops.length} quy trình Gà | {heoSops.length} quy trình Heo
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold text-white">
+            Nạp & Huấn Luyện Dữ Liệu Quy Trình An Toàn Sinh Học
+          </h1>
+        </div>
 
-              <p className="text-xs text-[#94A3B8] leading-relaxed">
-                Vui lòng nhập <strong className="text-[#F8FAFC]">ID Admin</strong> và{' '}
-                <strong className="text-[#F8FAFC]">Mật khẩu</strong> để truy cập khu vực quản lý và nạp dữ liệu quy trình An toàn sinh học.
-              </p>
-
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="admin-id-input"
-                    className="block text-xs font-medium text-[#F8FAFC]"
-                  >
-                    ID Quản trị:
-                  </label>
-                  <input
-                    id="admin-id-input"
-                    type="text"
-                    value={idInput}
-                    onChange={(e) => setIdInput(e.target.value)}
-                    placeholder="Nhập tài khoản quản trị..."
-                    autoFocus
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC] font-mono transition-colors"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="admin-password-input"
-                    className="block text-xs font-medium text-[#F8FAFC]"
-                  >
-                    Mật khẩu Quản trị:
-                  </label>
-                  <input
-                    id="admin-password-input"
-                    type="password"
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="Nhập mật khẩu..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC] font-mono transition-colors"
-                  />
-                </div>
-
-                {loginError && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
-                  >
-                    {loginError}
-                  </motion.div>
-                )}
-
-                <div className="space-y-2.5 pt-1">
-                  <motion.button
-                    whileHover={{ y: -2, scale: 1.01 }}
-                    whileTap={{ scale: 0.97 }}
-                    type="submit"
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#10B981] via-[#06B6D4] to-[#3B82F6] text-slate-950 font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer"
-                  >
-                    Đăng Nhập Cổng Admin
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ y: -2, scale: 1.01 }}
-                    whileTap={{ scale: 0.97 }}
-                    type="button"
-                    onClick={onBackToMain}
-                    className="w-full py-2.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-emerald-400/40 text-[#94A3B8] hover:text-[#F8FAFC] font-medium text-xs transition-colors cursor-pointer"
-                  >
-                    Trở về giao diện chính
-                  </motion.button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ADMIN DASHBOARD CONTENT */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="space-y-8"
-      >
-        {/* Top Admin Status Bar */}
-        <motion.div
-          variants={itemVariants}
-          className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 p-5 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 flex flex-wrap items-center justify-between gap-4 transition-colors duration-300"
+        <button
+          type="button"
+          onClick={onRefreshData}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold text-cyan-200 border border-cyan-300/30 transition-all cursor-pointer"
         >
-          <div>
-            <div className="flex items-center gap-2 text-xs text-[#94A3B8] mb-1">
-              <span className="font-mono text-emerald-400">
-                ● QUẢN TRỊ DỮ LIỆU AN TOÀN SINH HỌC
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>
-                Đang nạp {sops.filter((s) => s.active).length} / {sops.length} quy trình vào hệ thống
-              </span>
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>Làm mới dữ liệu</span>
+        </button>
+      </div>
+
+      {/* Main Grid: Mục 1 (Left 7 cols) & Mục 2 + Mục 3 (Right 5 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* MỤC 1: NẠP QUY TRÌNH MỚI */}
+        <div className="lg:col-span-7 rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/25 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] space-y-5">
+          <div className="flex items-center justify-between gap-2 border-b border-teal-300/20 pb-3.5">
+            <div className="flex items-center gap-2.5">
+              <PlusCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+              <h2 className="text-base font-bold text-white">
+                {editingId ? 'Đang Chỉnh Sửa Quy Trình' : '1. Nạp Quy Trình Mới'}
+              </h2>
             </div>
-            <h1 className="text-2xl font-bold text-[#F8FAFC]">
-              Quản Trị & Huấn Luyện Dữ Liệu Quy Trình Cho Bot Học
-            </h1>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="text-xs text-cyan-200 hover:text-white cursor-pointer"
+              >
+                Hủy chỉnh sửa
+              </button>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <motion.button
-              whileHover={{ y: -2, scale: 1.01 }}
-              whileTap={{ scale: 0.97 }}
-              type="button"
-              onClick={() => setShowCredentialsChange((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-xs font-medium text-[#F8FAFC] border border-white/10 hover:border-emerald-400/40 cursor-pointer whitespace-nowrap shrink-0 transition-colors"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
-              Đổi ID / Mật khẩu
-            </motion.button>
-            <motion.button
-              whileHover={{ y: -2, scale: 1.01 }}
-              whileTap={{ scale: 0.97 }}
-              type="button"
-              onClick={onLock}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-300 border border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.15)] cursor-pointer whitespace-nowrap shrink-0 transition-colors"
-            >
-              <Unlock className="w-3.5 h-3.5" />
-              Đăng Xuất Admin
-            </motion.button>
+          {/* a) Tiêu đề quy trình / Chủ đề ATSH * */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-cyan-100">
+              Tiêu đề quy trình / Chủ đề ATSH *
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (fieldErrors.title) setFieldErrors((prev) => ({ ...prev, title: undefined }));
+              }}
+              placeholder="VD: Quy trình sát trùng chuồng úm, kiểm soát phương tiện..."
+              className={`w-full px-3.5 py-2.5 rounded-xl bg-white/10 border focus:outline-none text-sm text-white placeholder-cyan-100/50 transition-all ${
+                fieldErrors.title
+                  ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.25)]'
+                  : 'border-cyan-300/30 focus:border-emerald-300'
+              }`}
+            />
+            {fieldErrors.title && (
+              <p className="text-xs text-amber-300">{fieldErrors.title}</p>
+            )}
           </div>
-        </motion.div>
 
-        {/* Optional Change Credentials Drawer */}
-        <AnimatePresence>
-          {showCredentialsChange && (
-            <motion.div
-              initial={{ opacity: 0, height: 0, y: -8 }}
-              animate={{ opacity: 1, height: 'auto', y: 0 }}
-              exit={{ opacity: 0, height: 0, y: -8 }}
-              className="rounded-2xl bg-slate-900/50 backdrop-blur-2xl border border-emerald-400/30 p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3"
-            >
-              <div className="text-xs text-[#94A3B8]">
-                <span className="font-semibold text-[#F8FAFC]">
-                  Cập nhật tài khoản Quản trị viên:
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={newIdInput}
-                  onChange={(e) => setNewIdInput(e.target.value)}
-                  placeholder="ID Admin mới..."
-                  className="px-3 py-1.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/50 focus:outline-none text-xs text-[#F8FAFC] font-mono"
-                />
-                <input
-                  type="password"
-                  value={newPasswordInput}
-                  onChange={(e) => setNewPasswordInput(e.target.value)}
-                  placeholder="Mật khẩu mới..."
-                  className="px-3 py-1.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/50 focus:outline-none text-xs text-[#F8FAFC] font-mono"
-                />
-                <motion.button
-                  whileHover={{ y: -2, scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  type="button"
-                  onClick={() => {
-                    if (!newIdInput.trim() || newPasswordInput.trim().length < 4) {
-                      onNotify(
-                        'warning',
-                        'Thông tin chưa hợp lệ',
-                        'Vui lòng nhập ID và mật khẩu mới ít nhất 4 ký tự.'
-                      );
-                      return;
-                    }
-                    onChangeCredentials(newIdInput.trim(), newPasswordInput.trim());
-                    setNewPasswordInput('');
-                    setShowCredentialsChange(false);
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#10B981] to-[#06B6D4] text-slate-950 text-xs font-bold cursor-pointer whitespace-nowrap shrink-0"
-                >
-                  Lưu thay đổi
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* GRID: 1. ADD/TRAIN SOP FORM (LEFT 7 COLS) & 2. BULK IMPORT + AI ENGINE SETTINGS (RIGHT 5 COLS) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* 1. Form Nạp Quy Trình Mới (Add/Train SOP Item) */}
-          <motion.form
-            variants={itemVariants}
-            onSubmit={handleSaveForm}
-            className="lg:col-span-7 rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 space-y-5 transition-colors duration-300"
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3.5">
-              <div className="flex items-center gap-2.5">
-                <PlusCircle className="w-5 h-5 text-emerald-400 shrink-0" />
-                <h2 className="text-base font-bold text-[#F8FAFC]">
-                  {editingId
-                    ? 'Đang Chỉnh Sửa Quy Trình'
-                    : '1. Nạp Quy Trình Mới Cho Bot Học (Add / Train SOP)'}
-                </h2>
-              </div>
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="text-xs text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer"
-                >
-                  Hủy chỉnh sửa
-                </button>
-              )}
+          {/* b) & c) Khối Khu vực & Phân vùng áp dụng */}
+          <div className="p-4 rounded-xl bg-white/[0.04] border border-teal-300/20 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold text-cyan-200 uppercase tracking-wider">
+                Khu vực & Phân vùng áp dụng
+              </span>
+              <span className="text-[11px] text-cyan-100/70">
+                Chọn 1 khu vực + 1 vùng cho mỗi quy trình
+              </span>
             </div>
 
+            {/* b) Khu vực * */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-[#F8FAFC]">
-                Tên quy trình / Chủ đề ATSH *
+              <label className="block text-xs font-semibold text-cyan-100">
+                Khu vực *
               </label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="VD: Quy trình kiểm tra & sát trùng xe vận chuyển cám..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/75 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC] transition-colors"
-              />
-            </div>
-
-            {/* Khu Vực (Add / Thêm Khu Vực + Chọn Loại Vùng tương ứng) Section */}
-            <div className="p-4 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/10 space-y-3.5">
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-emerald-300">
-                  Khu Vực & Loại Vùng Tương Ứng *
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                  <input
-                    type="text"
-                    value={newAreaInput}
-                    onChange={(e) => setNewAreaInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddArea();
-                      }
-                    }}
-                    placeholder="Nhập tên Khu Vực (VD: Khu Cách Ly, Trạm Rửa Xe, Chuồng Đẻ)..."
-                    className="sm:col-span-5 px-3.5 py-2.5 rounded-xl bg-[#060B14]/80 border border-emerald-500/30 focus:border-emerald-400 focus:outline-none text-sm text-[#F8FAFC]"
-                  />
-                  <select
-                    value={newAreaZoneType}
-                    onChange={(e) =>
-                      setNewAreaZoneType(
-                        e.target.value as
-                          | 'Vùng Xanh'
-                          | 'Vùng Vàng ( rủi ro )'
-                          | 'Vùng Đỏ ( rủi ro cao )'
-                      )
-                    }
-                    className="sm:col-span-4 px-3 py-2.5 rounded-xl bg-[#060B14]/80 border border-emerald-500/30 focus:border-emerald-400 focus:outline-none text-sm font-semibold text-[#F8FAFC]"
-                  >
-                    <option value="Vùng Xanh">■ Vùng Xanh</option>
-                    <option value="Vùng Vàng ( rủi ro )">▲ Vùng Vàng ( rủi ro )</option>
-                    <option value="Vùng Đỏ ( rủi ro cao )">● Vùng Đỏ ( rủi ro cao )</option>
-                  </select>
-                  <motion.button
-                    whileHover={{ y: -2, scale: 1.01 }}
-                    whileTap={{ scale: 0.97 }}
-                    type="button"
-                    onClick={handleAddArea}
-                    className="sm:col-span-3 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-gradient-to-r from-[#10B981] to-[#06B6D4] text-slate-950 font-bold text-xs shadow-[0_0_15px_rgba(16,185,129,0.25)] cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                    <span>Thêm Khu Vực</span>
-                  </motion.button>
-                </div>
+              <div className="relative">
+                <MapPin className="w-4 h-4 text-cyan-300/70 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  list="atsh-species-areas-datalist"
+                  value={area}
+                  onChange={(e) => {
+                    setArea(e.target.value);
+                    if (fieldErrors.area) setFieldErrors((prev) => ({ ...prev, area: undefined }));
+                  }}
+                  placeholder="Ví dụ: Trạm rửa xe, Nhà tắm sát trùng..."
+                  className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white/10 border focus:outline-none text-sm text-white placeholder-cyan-100/50 transition-all ${
+                    fieldErrors.area
+                      ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.25)]'
+                      : 'border-cyan-300/30 focus:border-emerald-300'
+                  }`}
+                />
+                <datalist id="atsh-species-areas-datalist">
+                  {areaSuggestions.map((item) => (
+                    <option key={item} value={item} />
+                  ))}
+                </datalist>
               </div>
-
-              {/* Selected Areas for current SOP (Each has its corresponding Zone Type box) */}
-              <div className="space-y-2">
-                <div className="text-[11px] text-[#94A3B8]">
-                  Danh sách Khu Vực & Loại Vùng đang áp dụng ({selectedAreas.length}):
-                </div>
-                {selectedAreas.length === 0 ? (
-                  <div className="text-xs text-amber-300 py-1">
-                    Chưa có Khu Vực nào được chọn. Hãy nhập tên Khu Vực, chọn Loại Vùng và nhấn &ldquo;Thêm Khu Vực&rdquo;.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {selectedAreas.map((area, idx) => {
-                      const parsed = parseAreaItem(area);
-                      const selectBorderClass =
-                        parsed.zoneType === 'Vùng Đỏ ( rủi ro cao )'
-                          ? 'bg-rose-500/10 border-rose-500/30 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
-                          : parsed.zoneType === 'Vùng Vàng ( rủi ro )'
-                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300';
-
-                      return (
-                        <div
-                          key={`${idx}-${parsed.zoneType}`}
-                          className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2 rounded-xl bg-[#060B14]/70 border border-white/10"
-                        >
-                          <input
-                            type="text"
-                            value={parsed.name}
-                            onChange={(e) => handleUpdateSelectedAreaName(idx, e.target.value)}
-                            placeholder="Tên Khu Vực..."
-                            className="sm:col-span-6 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs font-medium text-[#F8FAFC] focus:border-emerald-400 focus:outline-none"
-                          />
-                          <select
-                            value={parsed.zoneType}
-                            onChange={(e) =>
-                              handleUpdateSelectedAreaZoneType(
-                                idx,
-                                e.target.value as
-                                  | 'Vùng Xanh'
-                                  | 'Vùng Vàng ( rủi ro )'
-                                  | 'Vùng Đỏ ( rủi ro cao )'
-                              )
-                            }
-                            className={`sm:col-span-5 px-3 py-1.5 rounded-lg border text-xs font-semibold focus:outline-none ${selectBorderClass}`}
-                          >
-                            <option value="Vùng Xanh" className="bg-[#060B14] text-emerald-300">
-                              ■ Vùng Xanh
-                            </option>
-                            <option
-                              value="Vùng Vàng ( rủi ro )"
-                              className="bg-[#060B14] text-amber-300"
-                            >
-                              ▲ Vùng Vàng ( rủi ro )
-                            </option>
-                            <option
-                              value="Vùng Đỏ ( rủi ro cao )"
-                              className="bg-[#060B14] text-rose-300"
-                            >
-                              ● Vùng Đỏ ( rủi ro cao )
-                            </option>
-                          </select>
-                          <div className="sm:col-span-1 flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveSelectedArea(area)}
-                              className="p-1.5 rounded-lg bg-white/[0.04] hover:bg-rose-500/20 text-[#94A3B8] hover:text-rose-300 transition-colors cursor-pointer"
-                              title="Xóa Khu Vực này"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Saved Area Catalog Quick-Add */}
-              {areaCatalog.length > 0 && (
-                <div className="space-y-1.5 pt-2 border-t border-white/10">
-                  <div className="text-[11px] text-[#94A3B8]">
-                    Danh mục Khu Vực đã lưu (Nhấn để chọn / bỏ chọn nhanh — tự động đồng bộ sang Quy Trình Hệ Thống):
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {areaCatalog.map((areaItem) => {
-                      const isPicked = selectedAreas.includes(areaItem);
-                      return (
-                        <div
-                          key={areaItem}
-                          className={`inline-flex items-center rounded-lg border text-xs transition-colors ${
-                            isPicked
-                              ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300'
-                              : 'bg-[#060B14]/70 border-white/10 text-[#94A3B8] hover:border-white/25 hover:text-[#F8FAFC]'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleToggleCatalogArea(areaItem)}
-                            className="px-2.5 py-1 cursor-pointer text-left"
-                          >
-                            {isPicked ? '✓ ' : '+ '}
-                            {areaItem}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFromCatalog(areaItem)}
-                            className="px-1.5 py-1 text-slate-500 hover:text-rose-400 border-l border-white/10 cursor-pointer"
-                            title="Xóa khỏi danh mục lưu"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+              {fieldErrors.area && (
+                <p className="text-xs text-amber-300">{fieldErrors.area}</p>
               )}
-
-              <div className="space-y-1.5 pt-2 border-t border-white/10">
-                <label className="block text-xs font-medium text-[#F8FAFC]">
-                  Từ khóa nhận diện (Tags cách nhau bằng dấu phẩy)
-                </label>
-                <input
-                  type="text"
-                  value={tagsInput}
-                  onChange={(e) => setTagsInput(e.target.value)}
-                  placeholder="VD: xe cám, bồn cám, phun sương, sát trùng cổng, vùng đỏ"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC]"
-                />
-              </div>
             </div>
 
-            {/* Image Selection / Upload / Preset Picker */}
-            <div className="space-y-2.5 p-4 rounded-xl bg-white/[0.03] backdrop-blur-xl border border-white/10">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-xs font-medium text-[#F8FAFC]">
-                  Hình ảnh minh họa quy trình (URL, Upload Base64 hoặc Chọn ảnh mẫu ATSH):
-                </label>
-                <div className="flex items-center gap-2">
-                  <motion.button
-                    whileHover={{ y: -2, scale: 1.01 }}
-                    whileTap={{ scale: 0.97 }}
-                    type="button"
-                    onClick={() => setShowPresetGallery((prev) => !prev)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-xs font-semibold text-emerald-300 border border-emerald-500/30 cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <ImageIcon className="w-3.5 h-3.5" />
-                    {showPresetGallery ? 'Ẩn bộ ảnh mẫu ATSH' : 'Chọn ảnh mẫu ATSH (6 ảnh)'}
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ y: -2, scale: 1.01 }}
-                    whileTap={{ scale: 0.97 }}
-                    type="button"
-                    onClick={() => imageFileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs font-medium text-[#F8FAFC] border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    Upload ảnh (Base64)
-                  </motion.button>
-                  <input
-                    ref={imageFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageFileUpload}
-                    className="hidden"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="Dán link hình ảnh hoặc chọn từ thư viện mẫu..."
-                  className="flex-1 px-3.5 py-2 rounded-xl bg-[#060B14]/80 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-xs text-[#F8FAFC] font-mono"
-                />
-                <div className="w-20 h-12 rounded-lg overflow-hidden border border-white/15 shrink-0 bg-[#060B14]">
-                  <ResilientImage
-                    src={imageUrl}
-                    alt="Preview"
-                    zone={zone}
-                    containerClassName="w-full h-full"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              </div>
-
-              {/* Preset Images Drawer */}
-              {showPresetGallery && (
-                <div className="pt-3 border-t border-white/10 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  {PRESET_BIO_IMAGES.map((preset) => (
+            {/* c) Vùng * */}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-cyan-100">
+                Vùng *
+              </label>
+              <div
+                className={`grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-1 rounded-xl ${
+                  fieldErrors.zoneType ? 'ring-1 ring-amber-400' : ''
+                }`}
+              >
+                {ZONE_OPTIONS.map((opt) => {
+                  const isSelected = zoneType === opt.value;
+                  return (
                     <button
-                      key={preset.id}
+                      key={opt.value}
                       type="button"
                       onClick={() => {
-                        setImageUrl(preset.url);
-                        setShowPresetGallery(false);
+                        setZoneType(opt.value);
+                        if (fieldErrors.zoneType) {
+                          setFieldErrors((prev) => ({ ...prev, zoneType: undefined }));
+                        }
                       }}
-                      className={`group text-left rounded-xl overflow-hidden border transition-all cursor-pointer ${
-                        imageUrl === preset.url
-                          ? 'border-emerald-400 ring-1 ring-emerald-400'
-                          : 'border-white/10 hover:border-emerald-400/40'
+                      className={`px-3 py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        isSelected ? opt.activeClass : opt.inactiveClass
                       }`}
                     >
-                      <div className="h-20 w-full overflow-hidden bg-[#060B14]">
-                        <img
-                          src={preset.url}
-                          alt={preset.title}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                      </div>
-                      <div className="p-2 bg-[#060B14]/90">
-                        <div className="text-[11px] font-medium text-[#F8FAFC] line-clamp-1">
-                          {preset.title}
-                        </div>
-                      </div>
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full ${opt.dotColor} ${
+                          isSelected ? 'ring-2 ring-white/60' : 'opacity-75'
+                        }`}
+                      />
+                      <span>{opt.label}</span>
                     </button>
-                  ))}
+                  );
+                })}
+              </div>
+              {fieldErrors.zoneType && (
+                <p className="text-xs text-amber-300">{fieldErrors.zoneType}</p>
+              )}
+            </div>
+          </div>
+
+          {/* d) Khối Thông số kỹ thuật định lượng (không bắt buộc) */}
+          <div className="p-4 rounded-xl bg-white/[0.04] border border-teal-300/20 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-cyan-200 uppercase tracking-wider">
+                <Sliders className="w-4 h-4 text-cyan-300" />
+                <span>Thông số kỹ thuật định lượng (không bắt buộc)</span>
+              </label>
+              <span className="text-[11px] text-cyan-100/65">
+                Để trống nếu quy trình không có thông số
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {/* Hàng 1: Thời gian sát trùng | ≥ [ô số] | phút */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 items-center gap-2 sm:gap-3 p-2.5 rounded-xl bg-slate-950/40 border border-white/10">
+                <div className="sm:col-span-5 text-xs font-semibold text-cyan-100">
+                  Thời gian sát trùng
                 </div>
+                <div className="sm:col-span-5 flex items-center gap-2">
+                  <span className="px-2.5 py-1.5 rounded-lg bg-white/10 border border-cyan-300/25 text-xs font-mono font-bold text-emerald-300 select-none">
+                    ≥
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={disinfectMinInput}
+                    onChange={(e) => {
+                      setDisinfectMinInput(e.target.value);
+                      if (fieldErrors.disinfectMin) {
+                        setFieldErrors((prev) => ({ ...prev, disinfectMin: undefined }));
+                      }
+                    }}
+                    placeholder="VD: 30"
+                    className={`w-full px-3 py-1.5 rounded-lg bg-white/10 border focus:outline-none text-sm font-mono text-white placeholder-cyan-100/40 ${
+                      fieldErrors.disinfectMin
+                        ? 'border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
+                        : 'border-cyan-300/30 focus:border-emerald-300'
+                    }`}
+                  />
+                </div>
+                <div className="sm:col-span-2 text-xs font-mono text-cyan-200/80 sm:text-right">
+                  phút
+                </div>
+              </div>
+              {fieldErrors.disinfectMin && (
+                <p className="text-xs text-amber-300">{fieldErrors.disinfectMin}</p>
+              )}
+
+              {/* Hàng 2: Nồng độ pha thuốc | [1] : [100] | tỷ lệ */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 items-center gap-2 sm:gap-3 p-2.5 rounded-xl bg-slate-950/40 border border-white/10">
+                <div className="sm:col-span-5 text-xs font-semibold text-cyan-100">
+                  Nồng độ pha thuốc
+                </div>
+                <div className="sm:col-span-5 flex items-center gap-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={dilutionPartA}
+                    onChange={(e) => {
+                      setDilutionPartA(e.target.value);
+                      if (fieldErrors.dilution) {
+                        setFieldErrors((prev) => ({ ...prev, dilution: undefined }));
+                      }
+                    }}
+                    placeholder="1"
+                    className={`w-16 text-center px-2.5 py-1.5 rounded-lg bg-white/10 border focus:outline-none text-sm font-mono text-white placeholder-cyan-100/40 ${
+                      fieldErrors.dilution
+                        ? 'border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
+                        : 'border-cyan-300/30 focus:border-emerald-300'
+                    }`}
+                  />
+                  <span className="text-sm font-mono font-bold text-cyan-200 select-none">:</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={dilutionPartB}
+                    onChange={(e) => {
+                      setDilutionPartB(e.target.value);
+                      if (fieldErrors.dilution) {
+                        setFieldErrors((prev) => ({ ...prev, dilution: undefined }));
+                      }
+                    }}
+                    placeholder="100"
+                    className={`w-full px-3 py-1.5 rounded-lg bg-white/10 border focus:outline-none text-sm font-mono text-white placeholder-cyan-100/40 ${
+                      fieldErrors.dilution
+                        ? 'border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
+                        : 'border-cyan-300/30 focus:border-emerald-300'
+                    }`}
+                  />
+                </div>
+                <div className="sm:col-span-2 text-xs font-mono text-cyan-200/80 sm:text-right">
+                  tỷ lệ
+                </div>
+              </div>
+              {fieldErrors.dilution && (
+                <p className="text-xs text-amber-300">{fieldErrors.dilution}</p>
               )}
             </div>
+          </div>
 
-            {/* Key Metrics Editor */}
-            <div className="space-y-2">
-              <label className="block text-xs font-medium text-[#F8FAFC]">
-                Thông số kỹ thuật định lượng chính (Hiển thị bảng số liệu nhanh):
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {metrics.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className="p-2.5 rounded-xl bg-[#060B14]/70 border border-white/10 grid grid-cols-12 gap-1.5"
-                  >
-                    <input
-                      type="text"
-                      value={m.label}
-                      onChange={(e) => handleMetricChange(idx, 'label', e.target.value)}
-                      placeholder="Tên thông số (VD: Áp lực)"
-                      className="col-span-6 px-2 py-1 rounded-lg bg-white/[0.04] text-xs text-[#F8FAFC]"
-                    />
-                    <input
-                      type="text"
-                      value={m.value}
-                      onChange={(e) => handleMetricChange(idx, 'value', e.target.value)}
-                      placeholder="150–200"
-                      className="col-span-3 px-2 py-1 rounded-lg bg-white/[0.04] text-xs text-emerald-300 font-mono"
-                    />
-                    <input
-                      type="text"
-                      value={m.unit}
-                      onChange={(e) => handleMetricChange(idx, 'unit', e.target.value)}
-                      placeholder="bar"
-                      className="col-span-3 px-2 py-1 rounded-lg bg-white/[0.04] text-xs text-[#94A3B8] font-mono"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* e) Nội dung quy trình * */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-cyan-100">
+              Nội dung quy trình *
+            </label>
+            <textarea
+              rows={8}
+              value={content}
+              onChange={(e) => {
+                setContent(e.target.value);
+                if (fieldErrors.content) setFieldErrors((prev) => ({ ...prev, content: undefined }));
+              }}
+              placeholder="Dán toàn bộ các bước thao tác chuẩn, nhiệt độ, thời gian tiếp xúc, tiêu chí kiểm tra..."
+              className={`w-full px-3.5 py-2.5 rounded-xl bg-white/10 border focus:outline-none text-sm text-white font-sans leading-relaxed placeholder-cyan-100/50 transition-all ${
+                fieldErrors.content
+                  ? 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.25)]'
+                  : 'border-cyan-300/30 focus:border-emerald-300'
+              }`}
+            />
+            {fieldErrors.content && (
+              <p className="text-xs text-amber-300">{fieldErrors.content}</p>
+            )}
+          </div>
 
-            {/* Summary & Critical Warning */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-[#F8FAFC]">
-                  Tóm tắt ngắn quy trình
-                </label>
-                <textarea
-                  rows={2}
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  placeholder="Tóm tắt 1-2 câu hiển thị trên thẻ Thư viện SOP..."
-                  className="w-full px-3.5 py-2 rounded-xl bg-[#060B14]/75 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-xs text-[#F8FAFC]"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-rose-300">
-                  Cảnh báo rủi ro (Lưu ý sống còn)
-                </label>
-                <textarea
-                  rows={2}
-                  value={criticalWarning}
-                  onChange={(e) => setCriticalWarning(e.target.value)}
-                  placeholder="VD: Tuyệt đối không cho xe vào trại khi chưa khô hoàn toàn..."
-                  className="w-full px-3.5 py-2 rounded-xl bg-[#060B14]/75 border border-rose-500/30 focus:border-rose-400 focus:outline-none text-xs text-[#F8FAFC]"
-                />
-              </div>
-            </div>
+          {/* f) Lưu ý cảnh báo (không bắt buộc) */}
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-200">
+              <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0" />
+              <span>Lưu ý cảnh báo (không bắt buộc)</span>
+            </label>
+            <textarea
+              rows={3}
+              value={warning}
+              onChange={(e) => setWarning(e.target.value)}
+              placeholder="Nhập cảnh báo quan trọng hoặc điểm kiểm soát tới hạn (nếu có)..."
+              className="w-full px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-400/30 focus:border-amber-300 focus:outline-none text-sm text-white font-sans leading-relaxed placeholder-amber-100/45"
+            />
+          </div>
 
-            {/* Detailed Content for AI RAG */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-[#F8FAFC]">
-                Nội dung chi tiết quy trình (Dữ liệu chuẩn để Bot học - Hỗ trợ Markdown) *
-              </label>
-              <textarea
-                rows={7}
-                required
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Dán toàn bộ các bước thực hiện, thông số kỹ thuật (thời gian, nhiệt độ, nồng độ pha thuốc, khoảng cách an toàn), tiêu chí kiểm tra Đạt / Không đạt..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/75 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-sm text-[#F8FAFC] font-sans leading-relaxed"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              {editingId && (
-                <motion.button
-                  whileHover={{ y: -2, scale: 1.01 }}
-                  whileTap={{ scale: 0.97 }}
-                  type="button"
-                  onClick={resetForm}
-                  className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-medium text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer"
-                >
-                  Hủy
-                </motion.button>
-              )}
-              <motion.button
-                whileHover={{ y: -2, scale: 1.01 }}
-                whileTap={{ scale: 0.97 }}
-                type="submit"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#10B981] via-[#06B6D4] to-[#3B82F6] text-slate-950 font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] cursor-pointer"
+          {/* g) 2 Nút Lưu riêng cho Gà và Heo */}
+          <div className="pt-3 border-t border-teal-300/20 flex flex-col sm:flex-row items-center justify-end gap-3">
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-medium text-cyan-100 cursor-pointer"
               >
-                <Save className="w-4 h-4" />
-                <span>{editingId ? 'Cập Nhật Quy Trình SOP' : 'Lưu & Nạp Vào Bộ Nhớ AI'}</span>
-              </motion.button>
-            </div>
-          </motion.form>
+                Hủy
+              </button>
+            )}
 
-          {/* RIGHT COLUMN: 2. BULK IMPORT/EXPORT & 4. AI ENGINE SETTINGS */}
-          <div className="lg:col-span-5 space-y-6">
-            {/* 2. Nạp Nhanh Từ File (Bulk Import/Export) */}
-            <motion.div
-              variants={itemVariants}
-              className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 space-y-4 transition-colors duration-300"
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              disabled={isSubmitting}
+              onClick={() => handleSaveSop('ga')}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-bold text-sm shadow-md shadow-amber-400/25 cursor-pointer disabled:opacity-50"
             >
-              <div className="flex items-center gap-2.5 border-b border-white/10 pb-3">
-                <FileUp className="w-5 h-5 text-cyan-400 shrink-0" />
-                <h2 className="text-base font-bold text-[#F8FAFC]">
-                  2. Nạp Nhanh Từ File & Sao Lưu (Bulk Import / Export)
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>Nạp Quy Trình Gà</span>
+            </motion.button>
+
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              disabled={isSubmitting}
+              onClick={() => handleSaveSop('heo')}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-slate-950 font-bold text-sm shadow-md shadow-cyan-400/25 cursor-pointer disabled:opacity-50"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span>Nạp Quy Trình Heo</span>
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Cột Phải: Mục 2 (Nạp nhanh từ file & Sao lưu) + Mục 3 (Cấu hình bộ máy AI) */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* MỤC 2: NẠP NHANH TỪ FILE & SAO LƯU */}
+          <div className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/25 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] space-y-4">
+            <div className="flex items-center justify-between gap-2 border-b border-teal-300/20 pb-3">
+              <div className="flex items-center gap-2.5">
+                <FileUp className="w-5 h-5 text-cyan-300 shrink-0" />
+                <h2 className="text-base font-bold text-white">
+                  2. Nạp Nhanh Từ File & Sao Lưu
                 </h2>
               </div>
 
-              <p className="text-xs text-[#94A3B8] leading-relaxed">
-                Hỗ trợ tải lên file <code className="text-emerald-300 font-mono">.TXT</code> (phân tách các quy trình bằng dòng <code className="font-mono">---</code>), <code className="text-emerald-300 font-mono">.CSV</code> hoặc <code className="text-emerald-300 font-mono">.JSON</code> để nạp hàng loạt quy trình vào Knowledge Base.
-              </p>
+              <button
+                type="button"
+                onClick={handleDownloadSampleTxt}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/35 text-xs font-semibold text-cyan-200 cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>File mẫu (.TXT)</span>
+              </button>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <motion.button
-                  whileHover={{ y: -3, scale: 1.01 }}
-                  whileTap={{ scale: 0.97 }}
-                  type="button"
-                  onClick={() => bulkFileInputRef.current?.click()}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-semibold text-emerald-300 transition-colors cursor-pointer"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>Nạp thêm từ .TXT / .CSV / .JSON</span>
-                </motion.button>
-                <input
-                  ref={bulkFileInputRef}
-                  type="file"
-                  accept=".txt,.csv,.json"
-                  onChange={(e) => handleBulkUpload(e, false)}
-                  className="hidden"
-                />
+            <p className="text-xs text-cyan-100/75 leading-relaxed">
+              Hỗ trợ file <code className="text-cyan-200 font-mono">.TXT</code> (phân cách bằng dòng <code className="font-mono">---</code>), <code className="text-cyan-200 font-mono">.CSV</code> (<code className="font-mono">title,area,zone,disinfect_min,dilution,content,warning</code>) hoặc <code className="text-cyan-200 font-mono">.JSON</code>.
+            </p>
 
-                <motion.button
-                  whileHover={{ y: -3, scale: 1.01 }}
-                  whileTap={{ scale: 0.97 }}
-                  type="button"
-                  onClick={handleExportJson}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-emerald-400/40 text-xs font-semibold text-[#F8FAFC] transition-colors cursor-pointer"
-                >
-                  <Download className="w-4 h-4 text-emerald-400" />
-                  <span>Export Sao Lưu (.JSON)</span>
-                </motion.button>
+            <div className="grid grid-cols-2 gap-2.5">
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={isSubmitting}
+                onClick={() => {
+                  setBulkSpeciesTarget('ga');
+                  bulkFileInputRef.current?.click();
+                }}
+                className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-xs font-bold text-amber-200 cursor-pointer disabled:opacity-50"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Nạp thêm vào Gà</span>
+              </motion.button>
+
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={isSubmitting}
+                onClick={() => {
+                  setBulkSpeciesTarget('heo');
+                  bulkFileInputRef.current?.click();
+                }}
+                className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/35 text-xs font-bold text-emerald-200 cursor-pointer disabled:opacity-50"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Nạp thêm vào Heo</span>
+              </motion.button>
+
+              <input
+                ref={bulkFileInputRef}
+                type="file"
+                accept=".txt,.csv,.json"
+                onChange={(e) => handleBulkUpload(e, false)}
+                className="hidden"
+              />
+            </div>
+
+            {/* Export buttons */}
+            <div className="pt-3 border-t border-teal-300/15 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-cyan-100/75">Sao lưu (.JSON):</span>
+              <button
+                type="button"
+                onClick={() => handleExportJson('ga')}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-cyan-300/25 text-xs font-medium text-cyan-200 flex items-center gap-1 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-300" />
+                Export Gà ({gaSops.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportJson('heo')}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-cyan-300/25 text-xs font-medium text-cyan-200 flex items-center gap-1 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-300" />
+                Export Heo ({heoSops.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportJson('all')}
+                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-cyan-300/25 text-xs font-medium text-white flex items-center gap-1 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-cyan-300" />
+                Export Cả Hai
+              </button>
+            </div>
+
+            {/* Restore from JSON Backup */}
+            <div className="pt-3 border-t border-teal-300/15 space-y-2">
+              <div className="text-xs text-cyan-100/80 font-medium">
+                Khôi phục từ file sao lưu (.JSON - ghi đè theo loài):
               </div>
-
-              <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => restoreJsonInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#94A3B8] hover:text-emerald-300 cursor-pointer transition-colors"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    setRestoreSpeciesTarget('ga');
+                    restoreJsonInputRef.current?.click();
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-amber-500/20 border border-amber-400/30 text-xs font-semibold text-amber-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  Khôi phục toàn bộ từ bản sao lưu (.JSON)
+                  <span>Khôi phục cho Gà</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    setRestoreSpeciesTarget('heo');
+                    restoreJsonInputRef.current?.click();
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-emerald-500/20 border border-emerald-400/30 text-xs font-semibold text-emerald-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Khôi phục cho Heo</span>
                 </button>
                 <input
                   ref={restoreJsonInputRef}
@@ -1178,249 +949,281 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   onChange={(e) => handleBulkUpload(e, true)}
                   className="hidden"
                 />
-
-                <button
-                  type="button"
-                  onClick={onResetSeedData}
-                  className="inline-flex items-center gap-1.5 text-xs text-amber-300 hover:text-amber-200 cursor-pointer transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Khôi phục 5 quy trình mẫu mặc định
-                </button>
               </div>
-            </motion.div>
-
-            {/* 4. Cấu Hình AI (AI Engine Settings) */}
-            <motion.div
-              variants={itemVariants}
-              className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 space-y-4 transition-colors duration-300"
-            >
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2.5">
-                  <Cpu className="w-5 h-5 text-cyan-400 shrink-0" />
-                  <h2 className="text-base font-bold text-[#F8FAFC]">
-                    4. Cấu Hình Bộ Máy AI (AI Engine Settings)
-                  </h2>
-                </div>
-                <span className="text-xs font-mono text-emerald-400">● GEMINI-3.8-FLASH</span>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1">
-                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>Đã kết nối tự động với môi trường Server-Side AI Studio</span>
-                </div>
-                <p className="text-xs text-[#94A3B8] leading-relaxed">
-                  Hệ thống sử dụng cơ chế RAG đối chiếu trực tiếp toàn bộ quy trình đang Active trong bảng bên dưới làm ngữ cảnh chuẩn (Context) khi giải đáp.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-[#F8FAFC]">
-                    System Prompt bổ sung (Giọng điệu & Quy tắc xưng hô):
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setDraftSystemPrompt(DEFAULT_SYSTEM_PROMPT)}
-                    className="text-[11px] text-emerald-400 hover:underline cursor-pointer"
-                  >
-                    Đặt lại mặc định
-                  </button>
-                </div>
-                <textarea
-                  rows={4}
-                  value={draftSystemPrompt}
-                  onChange={(e) => setDraftSystemPrompt(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#060B14]/75 border border-white/15 focus:border-emerald-400/60 focus:outline-none text-xs text-[#F8FAFC] leading-relaxed"
-                />
-              </div>
-
-              <motion.button
-                whileHover={{ y: -2, scale: 1.01 }}
-                whileTap={{ scale: 0.97 }}
-                type="button"
-                onClick={() => onSaveSystemPrompt(draftSystemPrompt)}
-                className="w-full py-2.5 px-4 rounded-xl bg-white/[0.05] hover:bg-emerald-500/15 border border-white/15 hover:border-emerald-400/40 text-xs font-semibold text-emerald-300 transition-colors cursor-pointer"
-              >
-                Lưu Cấu Hình System Prompt
-              </motion.button>
-            </motion.div>
-          </div>
-        </div>
-
-        {/* 3. DANH SÁCH DỮ LIỆU ĐÃ NẠP (CRUD TABLE) */}
-        <motion.div
-          variants={itemVariants}
-          className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-white/10 hover:border-emerald-400/40 overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] ring-1 ring-inset ring-white/5 transition-colors duration-300"
-        >
-          <div className="px-6 py-4 bg-white/[0.02] border-b border-white/10 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-bold text-[#F8FAFC]">
-                3. Danh Sách Quy Trình Đã Nạp Trong Bộ Nhớ AI ({sops.length} Quy trình)
-              </h2>
-              <p className="text-xs text-[#94A3B8]">
-                Bật/Tắt trạng thái Active để cho phép hoặc tạm ngưng Bot sử dụng quy trình đó khi trả lời nhân viên.
-              </p>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-white/10 bg-[#060B14]/60 text-[11px] font-mono text-[#94A3B8]">
-                  <th className="py-3.5 px-4">HÌNH ẢNH</th>
-                  <th className="py-3.5 px-4">MÃ & TÊN QUY TRÌNH SOP</th>
-                  <th className="py-3.5 px-4">KHU VỰC</th>
-                  <th className="py-3.5 px-4">TỪ KHÓA NHẬN DIỆN</th>
-                  <th className="py-3.5 px-4">TRẠNG THÁI AI HỌC</th>
-                  <th className="py-3.5 px-4 text-right">THAO TÁC</th>
+          {/* MỤC 3: CẤU HÌNH BỘ MÁY AI */}
+          <div className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/25 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] space-y-4">
+            <div className="flex items-center justify-between border-b border-teal-300/20 pb-3">
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
+                <h2 className="text-base font-bold text-white">
+                  3. Cấu Hình Bộ Máy AI
+                </h2>
+              </div>
+            </div>
+
+            <p className="text-xs text-cyan-100/75 leading-relaxed">
+              Hướng dẫn bổ sung cho Trợ lý ATSH khi giải đáp quy trình (áp dụng kèm theo quy tắc RAG bắt buộc của hệ thống).
+            </p>
+
+            <textarea
+              rows={4}
+              value={promptDraft}
+              onChange={(e) => setPromptDraft(e.target.value)}
+              placeholder="Nhập chỉ dẫn văn phong hoặc lưu ý trình bày cho AI..."
+              className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-cyan-300/30 focus:border-emerald-300 focus:outline-none text-xs text-white leading-relaxed placeholder-cyan-100/45"
+            />
+
+            <div className="flex justify-end">
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => onSaveSystemPrompt(promptDraft)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-slate-950 font-bold text-xs shadow cursor-pointer"
+              >
+                Lưu Cấu Hình AI
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* MỤC 4: DANH SÁCH QUY TRÌNH ĐÃ NẠP */}
+      <div className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/25 overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.35)]">
+        <div className="px-6 py-4 bg-white/[0.03] border-b border-teal-300/20 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-base font-bold text-white">
+              4. Danh Sách Quy Trình Trong Hệ Thống ({allSops.length} Quy trình)
+            </h2>
+            <p className="text-xs text-cyan-100/75">
+              Đồng bộ trực tiếp từ Supabase · Nhấn Sửa để cập nhật hoặc Xóa để gỡ khỏi hệ thống.
+            </p>
+          </div>
+
+          {/* Species Filter Tabs */}
+          <div className="flex items-center gap-1.5 bg-white/10 p-1 rounded-xl border border-cyan-300/25">
+            <button
+              type="button"
+              onClick={() => setTableSpeciesFilter('ALL')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                tableSpeciesFilter === 'ALL'
+                  ? 'bg-gradient-to-r from-emerald-400 to-cyan-500 text-slate-950 shadow'
+                  : 'text-cyan-100 hover:text-white'
+              }`}
+            >
+              Tất Cả ({allSops.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableSpeciesFilter('ga')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                tableSpeciesFilter === 'ga'
+                  ? 'bg-amber-400 text-slate-950 shadow'
+                  : 'text-cyan-100 hover:text-white'
+              }`}
+            >
+              Trại Gà ({gaSops.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setTableSpeciesFilter('heo')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                tableSpeciesFilter === 'heo'
+                  ? 'bg-emerald-400 text-slate-950 shadow'
+                  : 'text-cyan-100 hover:text-white'
+              }`}
+            >
+              Trại Heo ({heoSops.length})
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-teal-300/20 bg-slate-950/60 text-[11px] font-mono text-cyan-100/80">
+                <th className="py-3 px-4">LOÀI</th>
+                <th className="py-3 px-4">TÊN QUY TRÌNH SOP</th>
+                <th className="py-3 px-4">KHU VỰC</th>
+                <th className="py-3 px-4">VÙNG</th>
+                <th className="py-3 px-4">SÁT TRÙNG</th>
+                <th className="py-3 px-4">NỒNG ĐỘ PHA</th>
+                <th className="py-3 px-4 text-right">THAO TÁC</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-teal-300/15 text-sm">
+              {displayedSops.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-cyan-200/60">
+                    Không có quy trình nào trong danh mục này. Hãy nạp quy trình mới bên trên.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10 text-sm">
-                {sops.map((sop) => {
-                  const zoneStyle = getZoneSemanticStyle(sop.zone);
+              ) : (
+                displayedSops.map((sop) => {
+                  const zoneBadge = getZoneTypeBadge(sop.zone_type);
+                  const hasDisinfect =
+                    sop.disinfect_min !== null &&
+                    sop.disinfect_min !== undefined &&
+                    Number(sop.disinfect_min) > 0;
+                  const hasDilution = Boolean(sop.dilution && sop.dilution.trim() !== '');
+
                   return (
-                    <tr
-                      key={sop.id}
-                      className={`hover:bg-white/[0.03] transition-colors ${
-                        !sop.active ? 'opacity-60' : ''
-                      }`}
-                    >
-                      <td className="py-3.5 px-4 w-24">
-                        <div className="w-20 h-12 rounded-lg overflow-hidden border border-white/15 bg-[#060B14] relative">
-                          <ResilientImage
-                            src={sop.imageUrl}
-                            alt={sop.title}
-                            zone={sop.zone}
-                            containerClassName="w-full h-full cursor-pointer"
-                            className="w-full h-full object-cover"
-                            onExpandClick={() =>
-                              onOpenLightbox({
-                                url: sop.imageUrl,
-                                title: sop.title,
-                                zoneLabel: sop.zoneLabel,
-                                zone: sop.zone,
-                                caption: sop.summary,
-                              })
-                            }
-                          />
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 max-w-md">
-                        <div className="font-mono text-xs text-cyan-400">{sop.code}</div>
-                        <div className="font-semibold text-[#F8FAFC] line-clamp-1">{sop.title}</div>
-                        <div className="text-xs text-[#94A3B8] line-clamp-1 mt-0.5">
-                          {sop.summary}
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${zoneStyle.badgeClass}`}
-                        >
-                          <span>{zoneStyle.glyph}</span>
-                          <span>{sop.zoneLabel || zoneStyle.shortTag}</span>
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-4 max-w-xs">
-                        <div className="text-xs text-[#94A3B8] line-clamp-2">
-                          {sop.tags.join(' · ')}
-                        </div>
-                      </td>
-
+                    <tr key={sop.id} className="hover:bg-white/[0.04] transition-colors">
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <motion.button
-                          whileHover={{ scale: 1.03 }}
-                          whileTap={{ scale: 0.96 }}
-                          type="button"
-                          onClick={() => onToggleActiveSop(sop.id)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-semibold border transition-colors cursor-pointer ${
-                            sop.active
-                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                              : 'bg-white/[0.04] text-[#94A3B8] border-white/10'
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            sop.species === 'ga'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-400/35'
+                              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/35'
                           }`}
                         >
-                          <span>{sop.active ? '● ACTIVE (Đang học)' : '○ TẠM TẮT'}</span>
-                        </motion.button>
+                          {sop.species === 'ga' ? '🐔 TRẠI GÀ' : '🐷 TRẠI HEO'}
+                        </span>
                       </td>
-
+                      <td className="py-3.5 px-4 max-w-md">
+                        <div className="font-semibold text-white">{sop.title}</div>
+                        <div className="text-xs text-cyan-100/70 line-clamp-1 mt-0.5">
+                          {sop.content.replace(/[#*`-]/g, '').slice(0, 100)}
+                          {sop.content.length > 100 ? '...' : ''}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-xs font-medium text-cyan-100 whitespace-nowrap">
+                        {sop.area || '-'}
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border ${zoneBadge.colorClass}`}
+                        >
+                          <span>{zoneBadge.glyph}</span>
+                          <span>{zoneBadge.label}</span>
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-xs font-mono text-emerald-300 whitespace-nowrap">
+                        {hasDisinfect ? `≥ ${sop.disinfect_min} phút` : '-'}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs font-mono text-cyan-200 whitespace-nowrap">
+                        {hasDilution ? sop.dilution : '-'}
+                      </td>
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
-                          <motion.button
-                            whileHover={{ y: -2, scale: 1.04 }}
-                            whileTap={{ scale: 0.96 }}
-                            type="button"
-                            onClick={() =>
-                              onOpenLightbox({
-                                url: sop.imageUrl,
-                                title: sop.title,
-                                zoneLabel: sop.zoneLabel,
-                                zone: sop.zone,
-                                caption: sop.summary,
-                              })
-                            }
-                            className="p-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] text-[#94A3B8] hover:text-[#F8FAFC] border border-white/10 cursor-pointer"
-                            title="Xem ảnh minh họa"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </motion.button>
-                          <motion.button
-                            whileHover={{ y: -2, scale: 1.03 }}
-                            whileTap={{ scale: 0.96 }}
+                        <div className="inline-flex items-center gap-2">
+                          <button
                             type="button"
                             onClick={() => handleEditClick(sop)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-xs font-medium text-cyan-300 border border-cyan-500/30 cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-xs font-semibold text-cyan-300 border border-cyan-400/30 cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
-                            Sửa
-                          </motion.button>
-
-                          {confirmDeleteId === sop.id ? (
-                            <div className="inline-flex items-center gap-1">
-                              <motion.button
-                                whileTap={{ scale: 0.96 }}
-                                type="button"
-                                onClick={() => {
-                                  onDeleteSop(sop.id);
-                                  setConfirmDeleteId(null);
-                                }}
-                                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white cursor-pointer"
-                              >
-                                Xác nhận xóa
-                              </motion.button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="p-1.5 rounded-lg bg-white/[0.05] text-[#94A3B8] hover:text-[#F8FAFC] cursor-pointer"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : (
-                            <motion.button
-                              whileHover={{ y: -2, scale: 1.03 }}
-                              whileTap={{ scale: 0.96 }}
-                              type="button"
-                              onClick={() => setConfirmDeleteId(sop.id)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-xs font-medium text-rose-300 border border-rose-500/30 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              Xóa
-                            </motion.button>
-                          )}
+                            <span>Sửa</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId({ id: sop.id, title: sop.title })}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-xs font-semibold text-rose-300 border border-rose-500/30 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Xóa</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Confirm Delete Modal */}
+      <AnimatePresence>
+        {confirmDeleteId && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl bg-slate-900 border border-rose-500/40 p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3 text-rose-300">
+                <AlertTriangle className="w-6 h-6 shrink-0" />
+                <h3 className="text-base font-bold text-white">Xác nhận xóa quy trình</h3>
+              </div>
+              <p className="text-xs text-cyan-100/80 leading-relaxed">
+                Anh/Chị có chắc chắn muốn xóa quy trình{' '}
+                <strong className="text-white">&ldquo;{confirmDeleteId.title}&rdquo;</strong> khỏi Supabase?
+                Hành động này không thể hoàn tác.
+              </p>
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-medium text-white cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSop(confirmDeleteId.id)}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white cursor-pointer"
+                >
+                  Xóa Vĩnh Viễn
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </motion.div>
-      </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm Restore Backup Modal */}
+      <AnimatePresence>
+        {pendingRestorePayload && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-500/40 p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center gap-3 text-amber-300">
+                <ShieldAlert className="w-6 h-6 shrink-0" />
+                <h3 className="text-base font-bold text-white">
+                  Xác nhận khôi phục dữ liệu ({pendingRestorePayload.species === 'ga' ? 'Gà' : 'Heo'})
+                </h3>
+              </div>
+              <p className="text-xs text-cyan-100/80 leading-relaxed">
+                Thao tác này sẽ <strong className="text-rose-300">thay thế toàn bộ quy trình {pendingRestorePayload.species === 'ga' ? 'Gà' : 'Heo'} hiện tại</strong> bằng dữ liệu từ file <strong className="text-white">{pendingRestorePayload.fileName}</strong> ({pendingRestorePayload.totalRawCount} bản ghi). Dữ liệu của loài còn lại không bị ảnh hưởng.
+              </p>
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPendingRestorePayload(null)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-medium text-white cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const payload = pendingRestorePayload;
+                    setPendingRestorePayload(null);
+                    await executeBulkAddRpc(
+                      payload.species,
+                      payload.items,
+                      payload.totalRawCount,
+                      true
+                    );
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-bold text-slate-950 cursor-pointer"
+                >
+                  Xác Nhận Khôi Phục
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
