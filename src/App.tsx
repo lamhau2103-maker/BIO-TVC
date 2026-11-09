@@ -97,7 +97,7 @@ export default function App() {
   const [isVerifyingSession, setIsVerifyingSession] = useState<boolean>(false);
 
   // Active navigation tabs
-  const [activeTab, setActiveTab] = useState<MainTabId>('ga');
+  const [activeTab, setActiveTab] = useState<MainTabId>('heo');
   const [gaSubTab, setGaSubTab] = useState<SubTabId>('chat');
   const [heoSubTab, setHeoSubTab] = useState<SubTabId>('chat');
 
@@ -145,7 +145,7 @@ export default function App() {
       clearStoredSessionToken();
       setToken(null);
       setAuthUser(null);
-      setActiveTab('ga');
+      setActiveTab('heo');
       if (isRevoked) {
         addToast(
           'warning',
@@ -297,13 +297,13 @@ export default function App() {
   useEffect(() => {
     if (!authUser) return;
     if (activeTab === 'admin' && authUser.role !== 'admin') {
-      setActiveTab('ga');
+      setActiveTab('heo');
     } else if (
       activeTab === 'tailieu' &&
       authUser.role !== 'admin' &&
       authUser.role !== 'phu_admin'
     ) {
-      setActiveTab('ga');
+      setActiveTab('heo');
     }
   }, [authUser, activeTab]);
 
@@ -454,8 +454,8 @@ export default function App() {
 
   // Navigation tabs configuration
   const navTabs: { id: MainTabId; label: string; icon: any }[] = [
-    { id: 'ga', label: 'Quy Trình (Gà)', icon: Layers },
     { id: 'heo', label: 'Quy Trình (Heo)', icon: Layers },
+    { id: 'ga', label: 'Quy Trình (Gà)', icon: Layers },
     ...(canAccessDocs ? [{ id: 'tailieu' as MainTabId, label: 'Tài Liệu', icon: FileText }] : []),
     ...(canAccessAdmin ? [{ id: 'admin' as MainTabId, label: 'Admin', icon: Settings }] : []),
   ];
