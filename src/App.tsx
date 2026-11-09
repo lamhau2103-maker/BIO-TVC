@@ -91,10 +91,10 @@ function mapRawSopRecord(item: any, fallbackSpecies: SpeciesType): SopDocument {
 }
 
 export default function App() {
-  // Session & Auth state
-  const [token, setToken] = useState<string | null>(() => getStoredSessionToken());
+  // Session & Auth state (always starts at login screen on page load/reload)
+  const [token, setToken] = useState<string | null>(null);
   const [authUser, setAuthUser] = useState<AuthUserState | null>(null);
-  const [isVerifyingSession, setIsVerifyingSession] = useState<boolean>(true);
+  const [isVerifyingSession, setIsVerifyingSession] = useState<boolean>(false);
 
   // Active navigation tabs
   const [activeTab, setActiveTab] = useState<MainTabId>('ga');
@@ -206,55 +206,33 @@ export default function App() {
     []
   );
 
-  // Heartbeat verification on mount
+  // Always return to login screen on page load / reload / exit
   useEffect(() => {
-    let isCancelled = false;
+    const savedToken = getStoredSessionToken();
+    clearStoredSessionToken();
+    setToken(null);
+    setAuthUser(null);
+    setIsVerifyingSession(false);
 
-    async function verifyInitialSession() {
-      const savedToken = getStoredSessionToken();
-      if (!savedToken || !isValidUuid(savedToken)) {
-        clearStoredSessionToken();
-        setToken(null);
-        setAuthUser(null);
-        setIsVerifyingSession(false);
-        return;
-      }
-
-      try {
-        const res = await invokeRpc<{ email: string; role: UserRole }>('me', {
-          p_token: savedToken,
-        });
-
-        if (isCancelled) return;
-
-        if (res.ok && res.data && res.data.email) {
-          setAuthUser(res.data);
-          setToken(savedToken);
-          fetchSpeciesData(savedToken);
-        } else {
-          clearStoredSessionToken();
-          setToken(null);
-          setAuthUser(null);
-        }
-      } catch {
-        if (!isCancelled) {
-          clearStoredSessionToken();
-          setToken(null);
-          setAuthUser(null);
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsVerifyingSession(false);
-        }
-      }
+    if (savedToken && isValidUuid(savedToken)) {
+      invokeRpc('logout', { p_token: savedToken }).catch(() => {
+        // ignore background logout error
+      });
     }
+  }, []);
 
-    verifyInitialSession();
-
-    return () => {
-      isCancelled = true;
+  // Clear stored session when exiting or reloading the web page
+  useEffect(() => {
+    const handleUnload = () => {
+      clearStoredSessionToken();
     };
-  }, [fetchSpeciesData]);
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+    };
+  }, []);
 
   // Reload list_sops whenever user switches tabs or subtabs
   useEffect(() => {
