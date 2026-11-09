@@ -416,6 +416,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
         </motion.div>
       </div>
+
+      {/* Bottom corner creator credit */}
+      <div className="fixed bottom-3 right-4 z-20 pointer-events-none select-none text-[11px] font-medium text-cyan-200/65 tracking-wide">
+        by Phuc Hau HR
+      </div>
     </div>
   );
 };

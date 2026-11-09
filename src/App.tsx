@@ -920,9 +920,16 @@ export default function App() {
                 </button>
               </>
             )}
+            <span aria-hidden="true">·</span>
+            <span className="text-[11px] font-medium text-cyan-200/70">by Phuc Hau HR</span>
           </div>
         </div>
       </footer>
+
+      {/* Bottom corner creator credit */}
+      <div className="fixed bottom-2.5 right-4 z-20 pointer-events-none select-none text-[11px] font-medium text-cyan-200/65 tracking-wide">
+        by Phuc Hau HR
+      </div>
 
       {/* TOAST NOTIFICATIONS */}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
