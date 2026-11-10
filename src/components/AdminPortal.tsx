@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   PlusCircle,
@@ -6,7 +6,6 @@ import {
   Trash2,
   Edit3,
   Upload,
-  Download,
   RotateCcw,
   FileUp,
   AlertTriangle,
@@ -15,7 +14,6 @@ import {
   FileText,
   Sliders,
   MapPin,
-  ShieldAlert,
 } from 'lucide-react';
 import { SopDocument, SpeciesType, ZoneType } from '../types/biosecurity';
 import {
@@ -112,21 +110,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Section 3: AI System Prompt state
   const [promptDraft, setPromptDraft] = useState(systemPrompt);
 
+  useEffect(() => {
+    setPromptDraft(systemPrompt);
+  }, [systemPrompt]);
+
   // Section 4: Table filter & delete modal
   const [tableSpeciesFilter, setTableSpeciesFilter] = useState<'ALL' | 'ga' | 'heo'>('ALL');
   const [confirmDeleteId, setConfirmDeleteId] = useState<{ id: string; title: string } | null>(null);
 
-  // Bulk file upload & restore refs
+  // Bulk file upload ref
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
-  const restoreJsonInputRef = useRef<HTMLInputElement>(null);
   const [bulkSpeciesTarget, setBulkSpeciesTarget] = useState<SpeciesType>('heo');
-  const [restoreSpeciesTarget, setRestoreSpeciesTarget] = useState<SpeciesType>('heo');
-  const [pendingRestorePayload, setPendingRestorePayload] = useState<{
-    species: SpeciesType;
-    fileName: string;
-    items: BulkImportItem[];
-    totalRawCount: number;
-  } | null>(null);
 
   // Unique areas for datalist suggestions per species
   const gaAreas = useMemo(() => {
@@ -389,7 +383,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   // Handle Bulk Upload (.TXT / .CSV / .JSON)
-  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>, isRestore = false) => {
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -400,26 +394,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         const { items, totalRawCount } = parseBulkImportFile(file.name, text);
 
         if (totalRawCount === 0 || items.length === 0) {
-          onNotify(
-            'error',
-            'Không tìm thấy dữ liệu',
-            isRestore
-              ? 'File không có quy trình hợp lệ, dữ liệu hiện tại được giữ nguyên'
-              : 'File không chứa quy trình hợp lệ.'
-          );
+          onNotify('error', 'Không tìm thấy dữ liệu', 'File không chứa quy trình hợp lệ.');
           return;
         }
 
-        if (isRestore) {
-          setPendingRestorePayload({
-            species: restoreSpeciesTarget,
-            fileName: file.name,
-            items,
-            totalRawCount,
-          });
-        } else {
-          await executeBulkAddRpc(bulkSpeciesTarget, items, totalRawCount, false);
-        }
+        await executeBulkAddRpc(bulkSpeciesTarget, items, totalRawCount, false);
       } catch (err) {
         onNotify('error', 'Lỗi đọc file', err instanceof Error ? err.message : 'File không hợp lệ');
       } finally {
@@ -427,47 +406,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       }
     };
     reader.readAsText(file, 'UTF-8');
-  };
-
-  // Export JSON backup with all new fields
-  const handleExportJson = (speciesOption: 'ga' | 'heo' | 'all') => {
-    let sourceList: SopDocument[] = [];
-    if (speciesOption === 'ga') {
-      sourceList = gaSops;
-    } else if (speciesOption === 'heo') {
-      sourceList = heoSops;
-    } else {
-      sourceList = [...gaSops, ...heoSops];
-    }
-
-    const exportData = sourceList.map((s) => ({
-      id: s.id,
-      species: s.species,
-      title: s.title,
-      area: s.area,
-      zone_type: s.zone_type,
-      disinfect_min: s.disinfect_min ?? null,
-      dilution: s.dilution ?? null,
-      content: s.content,
-      warning: s.warning ?? null,
-      created_by: s.created_by ?? null,
-      updated_by: s.updated_by ?? null,
-      created_at: s.created_at ?? null,
-      updated_at: s.updated_at ?? null,
-    }));
-
-    const dataStr = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `he-thong-atsh-backup-${speciesOption}-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    onNotify('success', 'Đã tải xuống bản sao lưu', `Đã export ${exportData.length} quy trình (.JSON).`);
   };
 
   // Combined SOPs list for table
@@ -819,13 +757,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
         {/* Cột Phải: Mục 2 (Nạp nhanh từ file & Sao lưu) + Mục 3 (Cấu hình bộ máy AI) */}
         <div className="lg:col-span-5 space-y-6">
-          {/* MỤC 2: NẠP NHANH TỪ FILE & SAO LƯU */}
+          {/* MỤC 2: NẠP NHANH TỪ FILE */}
           <div className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/25 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] space-y-4">
             <div className="flex items-center justify-between gap-2 border-b border-teal-300/20 pb-3">
               <div className="flex items-center gap-2.5">
                 <FileUp className="w-5 h-5 text-cyan-300 shrink-0" />
                 <h2 className="text-base font-bold text-white">
-                  2. Nạp Nhanh Từ File & Sao Lưu
+                  2. Nạp Nhanh Từ File
                 </h2>
               </div>
 
@@ -878,78 +816,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 ref={bulkFileInputRef}
                 type="file"
                 accept=".txt,.csv,.json"
-                onChange={(e) => handleBulkUpload(e, false)}
+                onChange={handleBulkUpload}
                 className="hidden"
               />
-            </div>
-
-            {/* Export buttons */}
-            <div className="pt-3 border-t border-teal-300/15 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-cyan-100/75">Sao lưu (.JSON):</span>
-              <button
-                type="button"
-                onClick={() => handleExportJson('ga')}
-                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-cyan-300/25 text-xs font-medium text-cyan-200 flex items-center gap-1 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-amber-300" />
-                Export Gà ({gaSops.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => handleExportJson('heo')}
-                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-cyan-300/25 text-xs font-medium text-cyan-200 flex items-center gap-1 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-300" />
-                Export Heo ({heoSops.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => handleExportJson('all')}
-                className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15 border border-cyan-300/25 text-xs font-medium text-white flex items-center gap-1 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-cyan-300" />
-                Export Cả Hai
-              </button>
-            </div>
-
-            {/* Restore from JSON Backup */}
-            <div className="pt-3 border-t border-teal-300/15 space-y-2">
-              <div className="text-xs text-cyan-100/80 font-medium">
-                Khôi phục từ file sao lưu (.JSON - ghi đè theo loài):
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    setRestoreSpeciesTarget('ga');
-                    restoreJsonInputRef.current?.click();
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-amber-500/20 border border-amber-400/30 text-xs font-semibold text-amber-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Khôi phục cho Gà</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    setRestoreSpeciesTarget('heo');
-                    restoreJsonInputRef.current?.click();
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-emerald-500/20 border border-emerald-400/30 text-xs font-semibold text-emerald-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Khôi phục cho Heo</span>
-                </button>
-                <input
-                  ref={restoreJsonInputRef}
-                  type="file"
-                  accept=".json"
-                  onChange={(e) => handleBulkUpload(e, true)}
-                  className="hidden"
-                />
-              </div>
             </div>
           </div>
 
@@ -1169,55 +1038,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white cursor-pointer"
                 >
                   Xóa Vĩnh Viễn
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Confirm Restore Backup Modal */}
-      <AnimatePresence>
-        {pendingRestorePayload && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-500/40 p-6 shadow-2xl space-y-4"
-            >
-              <div className="flex items-center gap-3 text-amber-300">
-                <ShieldAlert className="w-6 h-6 shrink-0" />
-                <h3 className="text-base font-bold text-white">
-                  Xác nhận khôi phục dữ liệu ({pendingRestorePayload.species === 'ga' ? 'Gà' : 'Heo'})
-                </h3>
-              </div>
-              <p className="text-xs text-cyan-100/80 leading-relaxed">
-                Thao tác này sẽ <strong className="text-rose-300">thay thế toàn bộ quy trình {pendingRestorePayload.species === 'ga' ? 'Gà' : 'Heo'} hiện tại</strong> bằng dữ liệu từ file <strong className="text-white">{pendingRestorePayload.fileName}</strong> ({pendingRestorePayload.totalRawCount} bản ghi). Dữ liệu của loài còn lại không bị ảnh hưởng.
-              </p>
-              <div className="flex justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setPendingRestorePayload(null)}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-medium text-white cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const payload = pendingRestorePayload;
-                    setPendingRestorePayload(null);
-                    await executeBulkAddRpc(
-                      payload.species,
-                      payload.items,
-                      payload.totalRawCount,
-                      true
-                    );
-                  }}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-bold text-slate-950 cursor-pointer"
-                >
-                  Xác Nhận Khôi Phục
                 </button>
               </div>
             </motion.div>

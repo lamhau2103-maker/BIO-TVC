@@ -51,9 +51,26 @@ function getGenAIClient() {
   });
 }
 
+const DEFAULT_AI_INSTRUCTION =
+  'Diễn đạt chuyên nghiệp, rõ ràng, bám sát quy trình an toàn sinh học của Thái Việt Corporation.';
+
+let savedAiSystemInstruction: string = DEFAULT_AI_INSTRUCTION;
+
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '15mb' }));
+
+  app.get('/api/biosecurity/ai-config', (_req, res) => {
+    res.json({ systemPrompt: savedAiSystemInstruction });
+  });
+
+  app.post('/api/biosecurity/ai-config', (req, res) => {
+    const { systemPrompt } = req.body as { systemPrompt?: string };
+    if (typeof systemPrompt === 'string') {
+      savedAiSystemInstruction = systemPrompt.trim();
+    }
+    res.json({ ok: true, systemPrompt: savedAiSystemInstruction });
+  });
 
   app.post('/api/biosecurity/ask', async (req, res) => {
     try {
@@ -61,7 +78,7 @@ async function startServer() {
         question,
         species = 'heo',
         activeSops = [],
-        customSystemInstruction = '',
+        customSystemInstruction,
       } = req.body as {
         question: string;
         species?: 'ga' | 'heo';
@@ -73,6 +90,11 @@ async function startServer() {
         res.status(400).json({ error: 'Vui lòng nhập câu hỏi tra cứu quy trình An toàn sinh học.' });
         return;
       }
+
+      const effectiveCustomInstruction =
+        typeof customSystemInstruction === 'string'
+          ? customSystemInstruction.trim()
+          : savedAiSystemInstruction.trim();
 
       const speciesText = species === 'ga' ? 'GÀ' : 'HEO';
       const speciesShort = species === 'ga' ? 'gà' : 'heo';
@@ -115,8 +137,13 @@ async function startServer() {
         .join('\n\n');
 
       const systemInstruction = `Bạn là "Trợ lý ATSH" của Hệ Thống An Toàn Sinh Học - CÔNG TY CỔ PHẦN THÁI VIỆT CORPORATION - Chuyên gia Cấp cao về Kiểm soát Dịch tễ và An toàn sinh học (Biosecurity) trang trại ${speciesText}.
-Xưng hô: "Trợ lý ATSH" và luôn gọi người dùng là "Anh/Chị" một cách lịch thiệp, tôn trọng và đồng hành.
-${customSystemInstruction ? `Hướng dẫn bổ sung: ${customSystemInstruction}` : ''}
+
+HƯỚNG DẪN TRỢ LÝ ATSH DO ADMIN CẤU HÌNH [ƯU TIÊN THỰC HIỆN NGHIÊM NGẶT]:
+${
+  effectiveCustomInstruction
+    ? `Bạn BẮT BUỘC phải thực hiện cách trả lời, văn phong, xưng hô, bố cục và cách giải đáp theo đúng yêu cầu đã ghi trong phần hướng dẫn sau đây:\n"""\n${effectiveCustomInstruction}\n"""\n(Mọi câu trả lời trong "stepsMarkdown" và "summaryTitle" phải tuân thủ chặt chẽ yêu cầu hướng dẫn trên của Admin).`
+    : `Xưng hô: "Trợ lý ATSH" và luôn gọi người dùng là "Anh/Chị" một cách lịch thiệp, tôn trọng và đồng hành.`
+}
 
 QUY TẮC RAG VÀ TÁCH BIỆT DỮ LIỆU [BẮT BUỘC]:
 1. Chỉ trả lời dựa trên các quy trình [${speciesText}] bên dưới. Nếu không có thông tin, trả lời: "Chưa có quy trình này trong hệ thống ${speciesShort}, vui lòng liên hệ bộ phận Bio." Không bịa đặt, không suy diễn ngoài tài liệu.
@@ -131,15 +158,19 @@ QUY TẮC RAG VÀ TÁCH BIỆT DỮ LIỆU [BẮT BUỘC]:
    - Đặt "isOutOfScope": false.
    - Đặt "matchedSopId" là ID của quy trình chính khớp nhất, và đặt "source_ids" là mảng chứa ID của quy trình nguồn được sử dụng.
    - Ghi rõ tên quy trình ("sourceSopTitle") và khu vực kèm vùng ("sourceZone").
-   - CHỈ TRẢ LỜI ĐÚNG VÀ ĐỦ NỘI DUNG XOAY QUANH CHỦ ĐỀ NGƯỜI DÙNG ĐANG HỎI, diễn đạt mềm mại, tư duy cao như chuyên gia chuyên ngành, nội dung trọng tâm. Không sao chép hàng loạt nguyên văn dài của toàn tài liệu.
+   - CHỈ TRẢ LỜI ĐÚNG VÀ ĐỦ NỘI DUNG XOAY QUANH CHỦ ĐỀ NGƯỜI DÙNG ĐANG HỎI, nội dung trọng tâm, không sao chép hàng loạt nguyên văn dài của toàn tài liệu, đồng thời TUÂN THỦ ĐÚNG CÁCH TRẢ LỜI TRONG PHẦN HƯỚNG DẪN TRỢ LÝ ATSH CỦA ADMIN.
 5. KHÔNG KÈM HÌNH ẢNH trong nội dung trả lời.
 
 DỮ LIỆU QUY TRÌNH [${speciesText}] HIỆN TẠI (${activeSops.length} QUY TRÌNH):
 ${knowledgeBaseText || `(Hiện chưa có quy trình nào cho ${speciesShort} trong hệ thống)`}`;
 
+      const userPromptContent = effectiveCustomInstruction
+        ? `Câu hỏi của nhân sự trang trại ${speciesShort}: "${question}"\n\n[YÊU CẦU CẤU HÌNH AI BẮT BUỘC KHI GIẢI ĐÁP]: Hãy trả lời và trình bày nội dung trong "stepsMarkdown" theo đúng hướng dẫn cài đặt sau đây: "${effectiveCustomInstruction}"`
+        : `Câu hỏi của nhân sự trang trại ${speciesShort}: "${question}"`;
+
       const response = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
-        contents: `Câu hỏi của nhân sự trang trại ${speciesShort}: "${question}"`,
+        contents: userPromptContent,
         config: {
           systemInstruction,
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
@@ -182,7 +213,8 @@ ${knowledgeBaseText || `(Hiện chưa có quy trình nào cho ${speciesShort} tr
               },
               stepsMarkdown: {
                 type: Type.STRING,
-                description: 'Nội dung trả lời trọng tâm, mềm mại, chuẩn mực định dạng Markdown.',
+                description:
+                  'Nội dung giải đáp trọng tâm định dạng Markdown, tuân thủ nghiêm ngặt hướng dẫn cài đặt của Trợ lý ATSH.',
               },
               criticalWarning: {
                 type: Type.STRING,

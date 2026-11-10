@@ -105,10 +105,18 @@ export default function App() {
   const [gaSops, setGaSops] = useState<SopDocument[]>([]);
   const [heoSops, setHeoSops] = useState<SopDocument[]>([]);
 
-  // System Prompt for AI
-  const [systemPrompt, setSystemPrompt] = useState<string>(
-    'Diễn đạt chuyên nghiệp, rõ ràng, bám sát quy trình an toàn sinh học của Thái Việt Corporation.'
-  );
+  // System Prompt for AI (persisted across sessions and synced with backend)
+  const [systemPrompt, setSystemPrompt] = useState<string>(() => {
+    try {
+      const saved = window.localStorage.getItem('atsh_ai_system_prompt');
+      if (saved !== null && saved.trim() !== '') {
+        return saved;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return 'Diễn đạt chuyên nghiệp, rõ ràng, bám sát quy trình an toàn sinh học của Thái Việt Corporation.';
+  });
 
   // Highlighted SOP in library
   const [highlightedSopId, setHighlightedSopId] = useState<string | null>(null);
@@ -439,12 +447,66 @@ export default function App() {
     handleSendQuestion(species, `Quy trình thực hiện cụ thể và các điểm kiểm soát của: ${sop.title}?`);
   };
 
-  const handleSaveSystemPrompt = (newPrompt: string) => {
-    setSystemPrompt(newPrompt);
+  // Load or sync AI System Prompt with backend on mount
+  useEffect(() => {
+    const localSaved = (() => {
+      try {
+        return window.localStorage.getItem('atsh_ai_system_prompt');
+      } catch {
+        return null;
+      }
+    })();
+
+    if (localSaved !== null && localSaved.trim() !== '') {
+      fetch('/api/biosecurity/ai-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt: localSaved }),
+      }).catch(() => {
+        // ignore network error
+      });
+    } else {
+      fetch('/api/biosecurity/ai-config')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && typeof data.systemPrompt === 'string' && data.systemPrompt.trim() !== '') {
+            setSystemPrompt(data.systemPrompt);
+            try {
+              window.localStorage.setItem('atsh_ai_system_prompt', data.systemPrompt);
+            } catch {
+              // ignore
+            }
+          }
+        })
+        .catch(() => {
+          // ignore
+        });
+    }
+  }, []);
+
+  const handleSaveSystemPrompt = async (newPrompt: string) => {
+    const trimmedPrompt = newPrompt.trim();
+    setSystemPrompt(trimmedPrompt);
+    try {
+      window.localStorage.setItem('atsh_ai_system_prompt', trimmedPrompt);
+    } catch {
+      // ignore storage errors
+    }
+
+    try {
+      await fetch('/api/biosecurity/ai-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemPrompt: trimmedPrompt }),
+      });
+    } catch {
+      // ignore network error
+    }
+
     addToast(
       'success',
       'Đã lưu cấu hình bộ máy AI',
-      'Hướng dẫn bổ sung đã được áp dụng cho các câu trả lời tiếp theo.'
+      'Hướng dẫn trợ lý ATSH đã được lưu và áp dụng ngay cho các câu trả lời giải đáp.'
     );
   };
 
