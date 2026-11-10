@@ -14,11 +14,13 @@ import {
   FileText,
   Sliders,
   MapPin,
+  Lock,
 } from 'lucide-react';
 import { SopDocument, SpeciesType, ZoneType } from '../types/biosecurity';
 import {
   invokeRpc,
   getZoneTypeBadge,
+  UserRole,
 } from '../lib/supabase';
 import {
   BulkImportItem,
@@ -29,6 +31,7 @@ import {
 
 interface AdminPortalProps {
   token: string;
+  userRole: UserRole;
   gaSops: SopDocument[];
   heoSops: SopDocument[];
   systemPrompt: string;
@@ -76,6 +79,7 @@ const ZONE_OPTIONS: {
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
   token,
+  userRole,
   gaSops,
   heoSops,
   systemPrompt,
@@ -84,6 +88,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onNotify,
   onSessionInvalid,
 }) => {
+  const isAdmin = userRole === 'admin';
+
   // Section 1 Form state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingSpecies, setEditingSpecies] = useState<SpeciesType | null>(null);
@@ -822,40 +828,67 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
           </div>
 
-          {/* MỤC 3: CẤU HÌNH BỘ MÁY AI */}
-          <div className="rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/25 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] space-y-4">
-            <div className="flex items-center justify-between border-b border-teal-300/20 pb-3">
-              <div className="flex items-center gap-2.5">
-                <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
-                <h2 className="text-base font-bold text-white">
-                  3. Cấu Hình Bộ Máy AI
-                </h2>
+          {/* MỤC 3: CẤU HÌNH BỘ MÁY AI (CHỈ ADMIN HIỂN THỊ RÕ VÀ CHỈNH SỬA, CÁC QUYỀN KHÁC ẨN MỜ) */}
+          <div
+            aria-disabled={!isAdmin}
+            className="relative rounded-2xl bg-slate-900/40 backdrop-blur-2xl border border-teal-300/25 p-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] overflow-hidden"
+          >
+            <div
+              className={`space-y-4 transition-all ${
+                isAdmin ? '' : 'opacity-35 blur-[3.5px] pointer-events-none select-none'
+              }`}
+            >
+              <div className="flex items-center justify-between border-b border-teal-300/20 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <h2 className="text-base font-bold text-white">
+                    3. Cấu Hình Bộ Máy AI
+                  </h2>
+                </div>
+              </div>
+
+              <p className="text-xs text-cyan-100/75 leading-relaxed">
+                Hướng dẫn bổ sung cho Trợ lý ATSH khi giải đáp quy trình (áp dụng kèm theo quy tắc RAG bắt buộc của hệ thống).
+              </p>
+
+              <textarea
+                rows={4}
+                value={isAdmin ? promptDraft : 'Nội dung cấu hình bộ máy AI chỉ dành cho Admin quản trị.'}
+                onChange={(e) => {
+                  if (isAdmin) setPromptDraft(e.target.value);
+                }}
+                readOnly={!isAdmin}
+                disabled={!isAdmin}
+                tabIndex={isAdmin ? 0 : -1}
+                placeholder="Nhập chỉ dẫn văn phong hoặc lưu ý trình bày cho AI..."
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-cyan-300/30 focus:border-emerald-300 focus:outline-none text-xs text-white leading-relaxed placeholder-cyan-100/45 disabled:cursor-not-allowed"
+              />
+
+              <div className="flex justify-end">
+                <motion.button
+                  type="button"
+                  whileHover={isAdmin ? { scale: 1.02 } : undefined}
+                  whileTap={isAdmin ? { scale: 0.98 } : undefined}
+                  disabled={!isAdmin}
+                  tabIndex={isAdmin ? 0 : -1}
+                  onClick={() => {
+                    if (isAdmin) onSaveSystemPrompt(promptDraft);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-slate-950 font-bold text-xs shadow cursor-pointer disabled:cursor-not-allowed"
+                >
+                  Lưu Cấu Hình AI
+                </motion.button>
               </div>
             </div>
 
-            <p className="text-xs text-cyan-100/75 leading-relaxed">
-              Hướng dẫn bổ sung cho Trợ lý ATSH khi giải đáp quy trình (áp dụng kèm theo quy tắc RAG bắt buộc của hệ thống).
-            </p>
-
-            <textarea
-              rows={4}
-              value={promptDraft}
-              onChange={(e) => setPromptDraft(e.target.value)}
-              placeholder="Nhập chỉ dẫn văn phong hoặc lưu ý trình bày cho AI..."
-              className="w-full px-3.5 py-2.5 rounded-xl bg-white/10 border border-cyan-300/30 focus:border-emerald-300 focus:outline-none text-xs text-white leading-relaxed placeholder-cyan-100/45"
-            />
-
-            <div className="flex justify-end">
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => onSaveSystemPrompt(promptDraft)}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-slate-950 font-bold text-xs shadow cursor-pointer"
-              >
-                Lưu Cấu Hình AI
-              </motion.button>
-            </div>
+            {!isAdmin && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/35 backdrop-blur-[2px] select-none">
+                <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/85 border border-cyan-300/30 text-xs font-semibold text-cyan-100/90 shadow-lg">
+                  <Lock className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                  <span>3. Cấu Hình Bộ Máy AI · Chỉ dành cho Admin</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

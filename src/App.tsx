@@ -485,6 +485,10 @@ export default function App() {
   }, []);
 
   const handleSaveSystemPrompt = async (newPrompt: string) => {
+    if (authUser?.role !== 'admin') {
+      addToast('warning', 'Không đủ quyền hạn', 'Chỉ Admin mới có quyền chỉnh sửa cấu hình bộ máy AI.');
+      return;
+    }
     const trimmedPrompt = newPrompt.trim();
     setSystemPrompt(trimmedPrompt);
     try {
@@ -896,6 +900,7 @@ export default function App() {
             >
               <AdminPortal
                 token={token}
+                userRole={authUser.role}
                 gaSops={gaSops}
                 heoSops={heoSops}
                 systemPrompt={systemPrompt}
